@@ -1,0 +1,13 @@
+{
+  "name": "upscale-ai",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Monorepo using pnpm workspaces",
+  "packageManager": "pnpm@10.32.1",
+  "engines": {
+    "node": ">=24"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}
