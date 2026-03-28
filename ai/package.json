@@ -1,5 +1,10 @@
 {
   "name": "@upscale-ai/ai",
-  "version": "0.0.0",
-  "private": true
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "setup": "python -m venv .venv && .venv/Scripts/pip install -r requirements.txt",
+    "dev": "python -m uvicorn src.main:app --reload --port 8000",
+    "start": "python -m uvicorn src.main:app --port 8000"
+  }
 }

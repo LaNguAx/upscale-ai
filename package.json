@@ -2,10 +2,15 @@
   "name": "upscale-ai",
   "version": "1.0.0",
   "private": true,
-  "description": "Monorepo using pnpm workspaces",
+  "description": "AI-powered video restoration and super-resolution",
   "packageManager": "pnpm@10.32.1",
   "engines": {
     "node": ">=24"
+  },
+  "scripts": {
+    "dev:frontend": "cd frontend && pnpm run dev",
+    "dev:backend": "cd backend && pnpm run start:dev",
+    "dev:ai": "cd ai && pnpm run dev"
   },
   "keywords": [],
   "author": "",
