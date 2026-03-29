@@ -1,19 +1,15 @@
-import { Outlet, NavLink } from 'react-router';
+import { Outlet } from 'react-router';
+import { Navbar } from '@/ui/components/Navbar';
+import { Footer } from '@/ui/components/Footer';
 
 export function RootLayout() {
   return (
-    <div>
-      <header>
-        <nav>
-          <NavLink to="/">Upscale AI</NavLink>
-          <NavLink to="/" end>
-            Home
-          </NavLink>
-        </nav>
-      </header>
-      <main>
+    <div className="flex min-h-screen flex-col">
+      <Navbar />
+      <main className="flex-1">
         <Outlet />
       </main>
+      <Footer />
     </div>
   );
 }

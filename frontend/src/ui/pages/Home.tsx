@@ -1,13 +1,15 @@
-import { Counter } from '@/ui/components/Counter';
-import { PokemonSearch } from '@/ui/components/PokemonSearch';
+import { HeroSection } from '@/ui/components/home/HeroSection';
+import { FeaturesSection } from '@/ui/components/home/FeaturesSection';
+import { HowItWorksSection } from '@/ui/components/home/HowItWorksSection';
+import { CTASection } from '@/ui/components/home/CTASection';
 
 export function Home() {
   return (
-    <div>
-      <h1>Upscale AI</h1>
-      <p>Enhance your images with the power of AI</p>
-      <Counter />
-      <PokemonSearch />
-    </div>
+    <>
+      <HeroSection />
+      <FeaturesSection />
+      <HowItWorksSection />
+      <CTASection />
+    </>
   );
 }
