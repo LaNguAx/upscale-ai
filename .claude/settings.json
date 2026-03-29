@@ -33,17 +33,6 @@
           }
         ]
       }
-    ],
-    "Stop": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "prompt",
-            "prompt": "Before finishing, verify: (1) Did you build/typecheck the code you changed? If you edited TypeScript, run the relevant build command. (2) If you made UI changes, did you test with Playwright? If not, consider suggesting the user verify visually. Return a brief status."
-          }
-        ]
-      }
     ]
   }
 }
