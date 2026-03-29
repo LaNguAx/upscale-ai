@@ -29,6 +29,7 @@ async function bootstrap() {
     .setDescription('Backend API for the UPscale project')
     .setVersion('1.0.0')
     .addTag('health')
+    .addTag('upload')
     .build();
 
   const swaggerDocument = SwaggerModule.createDocument(app, swaggerConfig);

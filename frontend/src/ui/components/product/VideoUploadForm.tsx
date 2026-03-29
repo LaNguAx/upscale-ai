@@ -3,6 +3,7 @@ import type { DragEvent, ChangeEvent } from 'react';
 import { Upload, FileVideo, X } from 'lucide-react';
 import { cn } from '@/ui/shadcn/lib/utils';
 import { Button } from '@/ui/shadcn/ui/button';
+import { Progress } from '@/ui/shadcn/ui/progress';
 import { formatFileSize } from '@/utils/format';
 
 const ACCEPTED_TYPES = ['video/mp4', 'video/x-msvideo', 'video/x-matroska', 'video/quicktime', 'video/webm'];
@@ -11,9 +12,10 @@ const MAX_SIZE = 500 * 1024 * 1024;
 interface VideoUploadFormProps {
   onUpload: (file: File) => void;
   isUploading: boolean;
+  uploadProgress?: number;
 }
 
-export function VideoUploadForm({ onUpload, isUploading }: VideoUploadFormProps) {
+export function VideoUploadForm({ onUpload, isUploading, uploadProgress = 0 }: VideoUploadFormProps) {
   const [file, setFile] = useState<File | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -135,6 +137,16 @@ export function VideoUploadForm({ onUpload, isUploading }: VideoUploadFormProps)
 
       {error && <p className="text-sm text-destructive">{error}</p>}
 
+      {isUploading && (
+        <div className="space-y-2">
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-muted-foreground">Uploading...</span>
+            <span className="font-medium">{uploadProgress}%</span>
+          </div>
+          <Progress value={uploadProgress} />
+        </div>
+      )}
+
       <Button
         onClick={handleSubmit}
         disabled={!file || isUploading}
@@ -144,7 +156,7 @@ export function VideoUploadForm({ onUpload, isUploading }: VideoUploadFormProps)
         {isUploading ? (
           <>
             <span className="mr-2 inline-block size-4 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" />
-            Uploading...
+            Uploading {uploadProgress}%
           </>
         ) : (
           <>

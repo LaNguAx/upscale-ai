@@ -7,6 +7,18 @@ import { Separator } from '@/ui/shadcn/ui/separator';
 import { Download, RotateCcw } from 'lucide-react';
 import { formatDuration } from '@/utils/format';
 
+function downloadFile(url: string, filename: string) {
+  fetch(url)
+    .then((res) => res.blob())
+    .then((blob) => {
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    });
+}
+
 interface JobResultPanelProps {
   jobId: string;
   onReset: () => void;
@@ -14,6 +26,7 @@ interface JobResultPanelProps {
 
 export function JobResultPanel({ jobId, onReset }: JobResultPanelProps) {
   const { data: result, isLoading, error } = useGetJobResultQuery(jobId);
+  const streamUrl = `${import.meta.env.VITE_API_BASE_URL}/upload/stream/${jobId}`;
 
   if (isLoading) {
     return (
@@ -48,7 +61,7 @@ export function JobResultPanel({ jobId, onReset }: JobResultPanelProps) {
       <CardContent className="space-y-4">
         <div className="overflow-hidden rounded-lg border border-border bg-muted/30">
           <video
-            src={result.downloadUrl}
+            src={streamUrl}
             controls
             className="aspect-video w-full"
           />
@@ -79,11 +92,12 @@ export function JobResultPanel({ jobId, onReset }: JobResultPanelProps) {
         )}
 
         <div className="flex gap-3">
-          <Button asChild className="flex-1">
-            <a href={result.downloadUrl} download={result.outputFilename}>
-              <Download className="size-4" data-icon="inline-start" />
-              Download Enhanced Video
-            </a>
+          <Button
+            className="flex-1"
+            onClick={() => downloadFile(streamUrl, result.outputFilename)}
+          >
+            <Download className="size-4" data-icon="inline-start" />
+            Download Enhanced Video
           </Button>
           <Button variant="outline" onClick={onReset}>
             <RotateCcw className="size-4" data-icon="inline-start" />

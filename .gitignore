@@ -9,3 +9,6 @@ coverage
 .DS_Store
 .vscode
 .idea
+storage
+ai/checkpoints/*.pth
+__pycache__
