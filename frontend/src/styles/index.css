@@ -127,6 +127,9 @@
   html {
     @apply font-sans;
     }
+  button, a, [role="button"], [type="submit"], label[for], select, summary {
+    cursor: pointer;
+    }
 }
 
 @layer utilities {

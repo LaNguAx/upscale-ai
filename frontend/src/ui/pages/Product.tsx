@@ -22,6 +22,7 @@ export function Product() {
 
   const [pageState, setPageState] = useState<PageState>('idle');
   const [jobId, setJobId] = useState<string | null>(null);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploadVideo] = useUploadVideoMutation();
   const dispatch = useAppDispatch();
@@ -29,6 +30,7 @@ export function Product() {
   const handleUpload = useCallback(
     async (file: File) => {
       setPageState('uploading');
+      setUploadProgress(0);
       setUploadError(null);
 
       try {
@@ -36,7 +38,11 @@ export function Product() {
         formData.append('video', file);
         if (slug) formData.append('product', slug);
 
-        const result = await uploadVideo(formData).unwrap();
+        const result = await uploadVideo({
+          formData,
+          onProgress: (p) => setUploadProgress(p)
+        }).unwrap();
+
         setJobId(result.jobId);
         setPageState('processing');
         dispatch(
@@ -57,6 +63,7 @@ export function Product() {
   const handleReset = useCallback(() => {
     setPageState('idle');
     setJobId(null);
+    setUploadProgress(0);
     setUploadError(null);
   }, []);
 
@@ -113,7 +120,11 @@ export function Product() {
             )}
 
             {(pageState === 'idle' || pageState === 'uploading') && (
-              <VideoUploadForm onUpload={handleUpload} isUploading={pageState === 'uploading'} />
+              <VideoUploadForm
+                onUpload={handleUpload}
+                isUploading={pageState === 'uploading'}
+                uploadProgress={uploadProgress}
+              />
             )}
 
             {pageState === 'processing' && jobId && (

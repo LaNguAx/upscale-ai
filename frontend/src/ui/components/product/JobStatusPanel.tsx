@@ -1,4 +1,4 @@
-import { useGetJobStatusQuery } from '@/store/api/upscale.api';
+import { useState, useEffect, useRef } from 'react';
 import { Badge } from '@/ui/shadcn/ui/badge';
 import { Progress } from '@/ui/shadcn/ui/progress';
 import { Alert, AlertDescription } from '@/ui/shadcn/ui/alert';
@@ -15,6 +15,14 @@ interface JobStatusPanelProps {
   onFailed: () => void;
 }
 
+interface SSEUpdate {
+  jobId: string;
+  state: JobState;
+  progress: number;
+  updatedAt: string;
+  error?: string;
+}
+
 const STATUS_CONFIG: Record<
   JobState,
   { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline'; icon: typeof Clock }
@@ -26,19 +34,50 @@ const STATUS_CONFIG: Record<
 };
 
 export function JobStatusPanel({ jobId, onCompleted, onFailed }: JobStatusPanelProps) {
-  const { data: status, isLoading, error } = useGetJobStatusQuery(jobId, {
-    pollingInterval: 3000,
-    skipPollingIfUnfocused: true
-  });
+  const [status, setStatus] = useState<SSEUpdate | null>(null);
+  const [error, setError] = useState(false);
+  const onCompletedRef = useRef(onCompleted);
+  const onFailedRef = useRef(onFailed);
 
-  if (status?.state === 'completed') {
-    setTimeout(onCompleted, 0);
-  }
-  if (status?.state === 'failed') {
-    setTimeout(onFailed, 0);
+  onCompletedRef.current = onCompleted;
+  onFailedRef.current = onFailed;
+
+  useEffect(() => {
+    const url = `${import.meta.env.VITE_API_BASE_URL}/upload/events/${jobId}`;
+    const es = new EventSource(url);
+
+    es.onmessage = (event) => {
+      const data = JSON.parse(event.data as string) as SSEUpdate;
+      setStatus(data);
+
+      if (data.state === 'completed') {
+        es.close();
+        onCompletedRef.current();
+      } else if (data.state === 'failed') {
+        es.close();
+        onFailedRef.current();
+      }
+    };
+
+    es.onerror = () => {
+      es.close();
+      setError(true);
+    };
+
+    return () => es.close();
+  }, [jobId]);
+
+  if (error) {
+    return (
+      <Alert variant="destructive">
+        <AlertDescription>
+          Lost connection to the server. Please try again.
+        </AlertDescription>
+      </Alert>
+    );
   }
 
-  if (isLoading) {
+  if (!status) {
     return (
       <Card>
         <CardContent className="space-y-4 p-6">
@@ -47,16 +86,6 @@ export function JobStatusPanel({ jobId, onCompleted, onFailed }: JobStatusPanelP
           <Skeleton className="h-4 w-48" />
         </CardContent>
       </Card>
-    );
-  }
-
-  if (error || !status) {
-    return (
-      <Alert variant="destructive">
-        <AlertDescription>
-          Unable to fetch job status. The server may be unavailable. Please try again later.
-        </AlertDescription>
-      </Alert>
     );
   }
 
@@ -87,7 +116,7 @@ export function JobStatusPanel({ jobId, onCompleted, onFailed }: JobStatusPanelP
 
         <div className="flex items-center justify-between text-xs text-muted-foreground">
           <span>Job ID: {jobId.slice(0, 8)}...</span>
-          <span>Started {formatDistanceToNow(new Date(status.createdAt), { addSuffix: true })}</span>
+          <span>Started {formatDistanceToNow(new Date(status.updatedAt), { addSuffix: true })}</span>
         </div>
 
         {status.state === 'failed' && status.error && (
