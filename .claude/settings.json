@@ -1,0 +1,49 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "FILE=$(echo $TOOL_INPUT | jq -r '.file_path // empty'); if [ -n \"$FILE\" ]; then case \"$FILE\" in *.ts|*.tsx) cd \"$(dirname \"$FILE\")\" && npx prettier --write \"$FILE\" 2>/dev/null;; *.py) python -m black --quiet \"$FILE\" 2>/dev/null || true;; esac; fi",
+            "timeout": 15
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "if": "Edit(.env)|Write(.env)|Edit(.env.*)|Write(.env.*)",
+            "command": "echo 'BLOCKED: Do not edit .env files directly — they contain secrets and are gitignored. Ask the user to update environment variables manually.' >&2 && exit 2"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "if": "Bash(rm -rf *)|Bash(git push --force*)|Bash(git reset --hard*)",
+            "command": "echo 'BLOCKED: Destructive command detected. Ask the user for explicit confirmation before running destructive operations.' >&2 && exit 2"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "prompt",
+            "prompt": "Before finishing, verify: (1) Did you build/typecheck the code you changed? If you edited TypeScript, run the relevant build command. (2) If you made UI changes, did you test with Playwright? If not, consider suggesting the user verify visually. Return a brief status."
+          }
+        ]
+      }
+    ]
+  }
+}
