@@ -12,3 +12,6 @@ coverage
 storage
 ai/checkpoints/*.pth
 __pycache__
+.playwright-mcp/
+.claude/settings.local.json
+rl-video-episode-0.mp4
