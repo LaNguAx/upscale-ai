@@ -1,4 +1,4 @@
-"""FastAPI AI service for video super-resolution inference."""
+"""FastAPI AI service for video super-resolution inference (V3: BasicVSR + SPyNet)."""
 
 import asyncio
 import json
@@ -14,9 +14,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
-from baseline.model import ResidualVSRModel
-from baseline.inference import run_video_vsr
-from baseline.config import SEQ_LEN, SCALE
+from baseline import VSRInferenceEngine, SEQ_LEN, SCALE
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -28,28 +26,32 @@ CHECKPOINT_PATH = os.environ.get(
 )
 DEVICE_NAME = os.environ.get("DEVICE", "cuda" if torch.cuda.is_available() else "cpu")
 DEVICE = torch.device(DEVICE_NAME)
+MAX_INPUT_HEIGHT = int(os.environ.get("MAX_INPUT_HEIGHT", "480"))
 
 # --- Global model state ---
-model: ResidualVSRModel | None = None
+engine: VSRInferenceEngine | None = None
 model_loaded = False
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Load the model on startup."""
-    global model, model_loaded
+    global engine, model_loaded
 
     if os.path.exists(CHECKPOINT_PATH):
-        logger.info(f"Loading model from {CHECKPOINT_PATH} on {DEVICE}...")
-        model = ResidualVSRModel(seq_len=SEQ_LEN, scale=SCALE).to(DEVICE)
-        model.load_state_dict(torch.load(CHECKPOINT_PATH, map_location=DEVICE))
-        model.eval()
+        logger.info(f"Loading V3 model from {CHECKPOINT_PATH} on {DEVICE}...")
+        engine = VSRInferenceEngine(
+            checkpoint_path=CHECKPOINT_PATH,
+            device=DEVICE_NAME,
+            seq_len=SEQ_LEN,
+            scale=SCALE,
+        )
         model_loaded = True
-        params = sum(p.numel() for p in model.parameters())
+        params = sum(p.numel() for p in engine.model.parameters())
         logger.info(f"Model loaded ({params:,} parameters)")
     else:
         logger.warning(f"No checkpoint found at {CHECKPOINT_PATH} — model not loaded")
-        model = None
+        engine = None
         model_loaded = False
 
     yield
@@ -78,7 +80,7 @@ def health():
 
 @app.post("/process")
 async def process(req: ProcessRequest):
-    if not model_loaded or model is None:
+    if not model_loaded or engine is None:
         raise HTTPException(status_code=503, detail="No model checkpoint loaded")
 
     if not os.path.exists(req.inputPath):
@@ -103,22 +105,18 @@ async def process(req: ProcessRequest):
 
     def inference_thread() -> None:
         try:
-            result = run_video_vsr(
+            result = engine.process_video(
                 input_path=req.inputPath,
                 output_path=req.outputPath,
-                model=model,
-                device=DEVICE,
-                seq_len=req.seqLen,
-                scale=req.scale,
-                simulate_lq=req.simulateLq,
-                max_frames=req.maxFrames,
+                max_height=MAX_INPUT_HEIGHT,
                 progress_callback=progress_callback,
             )
+            file_size = os.path.getsize(req.outputPath) if os.path.exists(req.outputPath) else 0
             completed_line = json.dumps({
                 "status": "completed",
                 "progress": 100,
-                "totalFrames": result["total_frames"],
-                "fileSize": result["file_size"],
+                "totalFrames": result["frames"],
+                "fileSize": file_size,
             })
             progress_queue.put(completed_line)
         except Exception as e:

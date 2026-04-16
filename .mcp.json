@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "playwright": {
+      "command": "npx",
+      "args": ["@playwright/mcp@latest"]
+    },
+    "claude.ai Context7": {
+      "command": "npx",
+      "args": ["-y", "@context7/mcp@latest"],
+      "env": {
+        "CONTEXT7_API_KEY": "ctx7sk-8e96cace-cf8c-4bbd-98f5-1d2c370d35ac"
+      }
+    }
+  }
+}

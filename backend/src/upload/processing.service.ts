@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { UploadService } from './upload.service';
 
@@ -146,12 +147,20 @@ export class ProcessingService {
   }
 
   private async mockProcessing(jobId: string): Promise<void> {
+    const job = this.uploadService.getJobRecord(jobId);
+    if (!job) return;
+
     for (const progress of MOCK_PROGRESS_STEPS) {
       await delay(MOCK_STEP_DELAY_MS);
       this.uploadService.updateJob(jobId, 'processing', progress);
       this.logger.log(`Job ${jobId}: ${progress}% (mock)`);
     }
 
+    const ext = path.extname(job.storedFilename);
+    const outputPath = path.resolve(this.resultDir, `${jobId}_enhanced${ext}`);
+    fs.copyFileSync(job.uploadPath, outputPath);
+
+    this.uploadService.setResultPath(jobId, outputPath);
     this.uploadService.updateJob(jobId, 'completed', 100);
     this.logger.log(`Job ${jobId}: completed (mock)`);
   }
