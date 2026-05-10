@@ -1,14 +1,23 @@
-"""Baseline Video Super-Resolution package."""
+"""Upscale AI baseline package — V3 model (BasicVSR + SPyNet, x4, seq=15)."""
 
-from .model import ResidualBlock, ResidualVSRModel
-from .inference import run_video_vsr
-from .config import SEQ_LEN, SCALE, DEVICE
+from .model_architecture import BasicVSRRecurrentSeq
+from .vsr_inference import VSRInferenceEngine
+
+# V3 training-time hyperparameters (must match the trained checkpoint)
+SCALE = 4
+SEQ_LEN = 15
+NUM_FEATS = 64
+NUM_EXTRACT_BLOCKS = 5
+NUM_PROP_BLOCKS = 20
+NUM_RECON_BLOCKS = 5
 
 __all__ = [
-    "ResidualBlock",
-    "ResidualVSRModel",
-    "run_video_vsr",
-    "SEQ_LEN",
+    "BasicVSRRecurrentSeq",
+    "VSRInferenceEngine",
     "SCALE",
-    "DEVICE",
+    "SEQ_LEN",
+    "NUM_FEATS",
+    "NUM_EXTRACT_BLOCKS",
+    "NUM_PROP_BLOCKS",
+    "NUM_RECON_BLOCKS",
 ]

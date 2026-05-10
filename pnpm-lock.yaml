@@ -6,7 +6,17 @@ settings:
 
 importers:
 
-  .: {}
+  .:
+    dependencies:
+      '-':
+        specifier: ^0.0.1
+        version: 0.0.1
+      g:
+        specifier: ^2.0.1
+        version: 2.0.1
+      pnpm:
+        specifier: ^10.33.0
+        version: 10.33.0
 
   ai: {}
 
@@ -226,6 +236,9 @@ importers:
         version: 8.0.2(@types/node@24.12.0)(jiti@2.6.1)(terser@5.46.1)
 
 packages:
+
+  '-@0.0.1':
+    resolution: {integrity: sha512-3HfneK3DGAm05fpyj20sT3apkNcvPpCuccOThOPdzz8sY7GgQGe0l93XH9bt+YzibcTIgUAIMoyVJI740RtgyQ==}
 
   '@angular-devkit/core@19.2.17':
     resolution: {integrity: sha512-Ah008x2RJkd0F+NLKqIpA34/vUGwjlprRCkvddjDopAWRzYn6xCkz1Tqwuhn0nR1Dy47wTLKYD999TYl5ONOAQ==}
@@ -3579,6 +3592,9 @@ packages:
   fuzzysort@3.1.0:
     resolution: {integrity: sha512-sR9BNCjBg6LNgwvxlBd0sBABvQitkLzoVY9MYYROQVX/FvfJ4Mai9LsGhDgd8qYdds0bY77VzYd5iuB+v5rwQQ==}
 
+  g@2.0.1:
+    resolution: {integrity: sha512-Fi6Ng5fZ/ANLQ15H11hCe+09sgUoNvDEBevVgx3KoYOhsH5iLNPn54hx0jPZ+3oSWr+xajnp2Qau9VmPsc7hTA==}
+
   gensync@1.0.0-beta.2:
     resolution: {integrity: sha512-3hN7NaskYvMDLQY55gnW3NQ+mesEAepTqlg+VEbj7zzqEMBVNhzcGYYeqFo/TlYz6eQiFcp1HcsCZO+nGgS8zg==}
     engines: {node: '>=6.9.0'}
@@ -4590,6 +4606,11 @@ packages:
     resolution: {integrity: sha512-Nc3IT5yHzflTfbjgqWcCPpo7DaKy4FnpB0l/zCAW0Tc7jxAiuqSxHasntB3D7887LSrA93kDJ9IXovxJYxyLCA==}
     engines: {node: '>=4'}
 
+  pnpm@10.33.0:
+    resolution: {integrity: sha512-EFaLtKavtYyes2MNqQzJUWQXq+vT+rvmc58K55VyjaFJHp21pUTHatjrdXD1xLs9bGN7LLQb/c20f6gjyGSTGQ==}
+    engines: {node: '>=18.12'}
+    hasBin: true
+
   postcss-selector-parser@7.1.1:
     resolution: {integrity: sha512-orRsuYpJVw8LdAwqqLykBj9ecS5/cRHlI5+nvTo8LcCKmzDmqVORXtOIYEEQuL9D4BxtA1lm5isAqzQZCoQ6Eg==}
     engines: {node: '>=4'}
@@ -5532,6 +5553,8 @@ packages:
     resolution: {integrity: sha512-rftlrkhHZOcjDwkGlnUtZZkvaPHCsDATp4pGpuOOMDaTdDDXF91wuVDJoWoPsKX/3YPQ5fHuF3STjcYyKr+Qhg==}
 
 snapshots:
+
+  '-@0.0.1': {}
 
   '@angular-devkit/core@19.2.17(chokidar@4.0.3)':
     dependencies:
@@ -9124,6 +9147,8 @@ snapshots:
 
   fuzzysort@3.1.0: {}
 
+  g@2.0.1: {}
+
   gensync@1.0.0-beta.2: {}
 
   get-caller-file@2.0.5: {}
@@ -10190,6 +10215,8 @@ snapshots:
       find-up: 4.1.0
 
   pluralize@8.0.0: {}
+
+  pnpm@10.33.0: {}
 
   postcss-selector-parser@7.1.1:
     dependencies:
