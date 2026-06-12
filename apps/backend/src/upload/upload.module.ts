@@ -17,7 +17,7 @@ import { ProcessingService } from './processing.service';
       useFactory: (configService: ConfigService) => {
         const uploadDir = path.resolve(
           process.cwd(),
-          configService.get<string>('UPLOAD_DIR', '../storage/uploads'),
+          configService.get<string>('UPLOAD_DIR', '../../storage/uploads'),
         );
         const maxSizeMb = configService.get<number>('MAX_FILE_SIZE_MB', 500);
         const allowedExtensions = configService

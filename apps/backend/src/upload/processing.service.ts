@@ -39,7 +39,7 @@ export class ProcessingService {
     );
     this.resultDir = path.resolve(
       process.cwd(),
-      this.configService.get<string>('RESULT_DIR', '../storage/results'),
+      this.configService.get<string>('RESULT_DIR', '../../storage/results'),
     );
   }
 

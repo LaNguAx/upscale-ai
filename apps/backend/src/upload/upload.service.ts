@@ -50,11 +50,11 @@ export class UploadService {
   constructor(private readonly configService: ConfigService) {
     this.uploadDir = path.resolve(
       process.cwd(),
-      this.configService.get<string>('UPLOAD_DIR', '../storage/uploads'),
+      this.configService.get<string>('UPLOAD_DIR', '../../storage/uploads'),
     );
     this.resultDir = path.resolve(
       process.cwd(),
-      this.configService.get<string>('RESULT_DIR', '../storage/results'),
+      this.configService.get<string>('RESULT_DIR', '../../storage/results'),
     );
 
     fs.mkdirSync(this.uploadDir, { recursive: true });

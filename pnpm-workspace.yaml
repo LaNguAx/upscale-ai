@@ -1,7 +1,3 @@
 packages:
   - 'apps/*'
   - 'packages/*'
-  # Legacy locations, removed in Phase 3 of the refactor:
-  - 'backend'
-  - 'frontend'
-  - 'ai'
