@@ -1,5 +1,11 @@
 {
-  "name": "@upscale-ai/ai",
+  "name": "ai",
   "version": "0.0.0",
-  "private": true
+  "private": true,
+  "description": "UPscale Python AI inference service (FastAPI + PyTorch BasicVSR)",
+  "scripts": {
+    "dev": "python -m uvicorn server:app --host 0.0.0.0 --port 8000 --reload",
+    "start:prod": "python -m uvicorn server:app --host 0.0.0.0 --port 8000",
+    "setup": "python -m pip install -r requirements.txt"
+  }
 }
