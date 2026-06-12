@@ -8,7 +8,12 @@ import type { JobStatusDto } from './dto/job-status.dto';
 import type { JobResultDto } from './dto/job-result.dto';
 import type { UploadResponseDto } from './dto/upload-response.dto';
 
-type JobState = 'queued' | 'processing' | 'completed' | 'failed';
+export type JobState =
+  | 'queued'
+  | 'processing'
+  | 'completed'
+  | 'failed'
+  | 'cancelled';
 
 interface JobRecord {
   jobId: string;
@@ -29,6 +34,10 @@ interface JobUpdate {
   progress: number;
   updatedAt: string;
   error?: string;
+}
+
+function isTerminalState(state: JobState): boolean {
+  return state === 'completed' || state === 'failed' || state === 'cancelled';
 }
 
 @Injectable()
@@ -81,6 +90,7 @@ export class UploadService {
   ): void {
     const job = this.jobs.get(jobId);
     if (!job) return;
+    if (isTerminalState(job.state)) return;
 
     const now = new Date().toISOString();
     job.state = state;
@@ -115,7 +125,7 @@ export class UploadService {
       filter((u) => u.jobId === jobId),
       startWith(currentState),
       takeWhile(
-        (u) => u.state !== 'completed' && u.state !== 'failed',
+        (u) => !isTerminalState(u.state),
         true,
       ),
       map(
@@ -181,8 +191,20 @@ export class UploadService {
 
   setResultPath(jobId: string, resultPath: string): void {
     const job = this.jobs.get(jobId);
-    if (job) {
+    if (job && job.state === 'processing') {
       job.resultPath = resultPath;
     }
+  }
+
+  cancelJob(jobId: string, reason = 'Upscaling cancelled by user'): void {
+    const job = this.jobs.get(jobId);
+    if (!job) {
+      throw new NotFoundException(`Job ${jobId} not found`);
+    }
+    if (isTerminalState(job.state)) {
+      return;
+    }
+
+    this.updateJob(jobId, 'cancelled', job.progress, reason);
   }
 }

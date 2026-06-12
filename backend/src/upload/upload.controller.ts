@@ -83,6 +83,13 @@ export class UploadController {
     return this.uploadService.getJobResult(jobId);
   }
 
+  @Post('cancel/:jobId')
+  @ApiParam({ name: 'jobId', description: 'Job identifier' })
+  async cancel(@Param('jobId') jobId: string): Promise<{ jobId: string }> {
+    await this.processingService.cancelJob(jobId);
+    return { jobId };
+  }
+
   @Sse('events/:jobId')
   @ApiParam({ name: 'jobId', description: 'Job identifier' })
   events(@Param('jobId') jobId: string): Observable<MessageEvent> {

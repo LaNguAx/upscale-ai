@@ -7,14 +7,59 @@ import { JobResultPanel } from '@/ui/components/product/JobResultPanel';
 import { Alert, AlertDescription } from '@/ui/shadcn/ui/alert';
 import { Badge } from '@/ui/shadcn/ui/badge';
 import { Button } from '@/ui/shadcn/ui/button';
-import { useUploadVideoMutation } from '@/store/api/upscale.api';
+import { useUploadVideoMutation, useCancelJobMutation } from '@/store/api/upscale.api';
 import { useAppDispatch } from '@/store/hooks';
 import { addJob } from '@/store/slices/job.slice';
 import { getProductBySlug } from '@/consts/products';
 import { Crown, RotateCcw, Construction } from 'lucide-react';
 import { Card, CardContent } from '@/ui/shadcn/ui/card';
 
-type PageState = 'idle' | 'uploading' | 'processing' | 'completed' | 'failed';
+type PageState = 'idle' | 'uploading' | 'processing' | 'completed' | 'failed' | 'cancelled';
+
+type UploadMutationError =
+  | {
+      error?: string;
+      data?: { message?: string | string[] };
+      status?: string | number;
+    }
+  | undefined;
+
+function getUploadErrorMessage(error: unknown): string {
+  const typedError = error as UploadMutationError;
+  if (!typedError) {
+    return 'Failed to upload video. Please check your connection and try again.';
+  }
+
+  if (typeof typedError.error === 'string' && typedError.error.length > 0) {
+    return typedError.error;
+  }
+
+  const apiMessage = typedError.data?.message;
+  if (Array.isArray(apiMessage)) {
+    return apiMessage.join(', ');
+  }
+
+  if (typeof apiMessage === 'string' && apiMessage.length > 0) {
+    return apiMessage;
+  }
+
+  return 'Failed to upload video. Please check your connection and try again.';
+}
+
+function getCancelErrorMessage(error: unknown): string {
+  const typedError = error as UploadMutationError;
+  const apiMessage = typedError?.data?.message;
+  if (Array.isArray(apiMessage)) {
+    return apiMessage.join(', ');
+  }
+  if (typeof apiMessage === 'string' && apiMessage.length > 0) {
+    return apiMessage;
+  }
+  if (typeof typedError?.error === 'string' && typedError.error.length > 0) {
+    return typedError.error;
+  }
+  return 'Failed to stop upscaling. Please try again.';
+}
 
 export function Product() {
   const { slug } = useParams<{ slug: string }>();
@@ -24,7 +69,10 @@ export function Product() {
   const [jobId, setJobId] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [processingError, setProcessingError] = useState<string | null>(null);
+  const [isStopping, setIsStopping] = useState(false);
   const [uploadVideo] = useUploadVideoMutation();
+  const [cancelJob] = useCancelJobMutation();
   const dispatch = useAppDispatch();
 
   const handleUpload = useCallback(
@@ -32,6 +80,8 @@ export function Product() {
       setPageState('uploading');
       setUploadProgress(0);
       setUploadError(null);
+      setProcessingError(null);
+      setIsStopping(false);
 
       try {
         const formData = new FormData();
@@ -52,8 +102,8 @@ export function Product() {
             submittedAt: new Date().toISOString()
           })
         );
-      } catch {
-        setUploadError('Failed to upload video. Please check your connection and try again.');
+      } catch (error) {
+        setUploadError(getUploadErrorMessage(error));
         setPageState('idle');
       }
     },
@@ -65,7 +115,21 @@ export function Product() {
     setJobId(null);
     setUploadProgress(0);
     setUploadError(null);
+    setProcessingError(null);
+    setIsStopping(false);
   }, []);
+
+  const handleStopUpscaling = useCallback(async () => {
+    if (!jobId) return;
+    try {
+      setIsStopping(true);
+      await cancelJob(jobId).unwrap();
+    } catch (error) {
+      setProcessingError(getCancelErrorMessage(error));
+      setPageState('failed');
+      setIsStopping(false);
+    }
+  }, [cancelJob, jobId]);
 
   if (!product) {
     return <Navigate to="/products/upscaler" replace />;
@@ -131,7 +195,18 @@ export function Product() {
               <JobStatusPanel
                 jobId={jobId}
                 onCompleted={() => setPageState('completed')}
-                onFailed={() => setPageState('failed')}
+                onCancelled={(reason) => {
+                  setProcessingError(reason ?? 'Upscaling cancelled by user.');
+                  setPageState('cancelled');
+                  setIsStopping(false);
+                }}
+                onFailed={(reason) => {
+                  setProcessingError(reason ?? 'AI inference failed. Please try again.');
+                  setPageState('failed');
+                  setIsStopping(false);
+                }}
+                onStop={handleStopUpscaling}
+                isStopping={isStopping}
               />
             )}
 
@@ -143,13 +218,27 @@ export function Product() {
               <div className="space-y-4">
                 <Alert variant="destructive">
                   <AlertDescription>
-                    Video processing failed. This may be due to an unsupported format or a server
-                    issue.
+                    {processingError ??
+                      'Video processing failed. This may be due to an unsupported format or a server issue.'}
                   </AlertDescription>
                 </Alert>
                 <Button variant="outline" onClick={handleReset} className="w-full">
                   <RotateCcw className="size-4" data-icon="inline-start" />
                   Try Again
+                </Button>
+              </div>
+            )}
+
+            {pageState === 'cancelled' && (
+              <div className="space-y-4">
+                <Alert>
+                  <AlertDescription>
+                    {processingError ?? 'Upscaling cancelled successfully.'}
+                  </AlertDescription>
+                </Alert>
+                <Button variant="outline" onClick={handleReset} className="w-full">
+                  <RotateCcw className="size-4" data-icon="inline-start" />
+                  Upload New Video
                 </Button>
               </div>
             )}

@@ -6,6 +6,7 @@ import { Alert, AlertDescription } from '@/ui/shadcn/ui/alert';
 import { Separator } from '@/ui/shadcn/ui/separator';
 import { Download, RotateCcw } from 'lucide-react';
 import { formatDuration } from '@/utils/format';
+import { API_BASE_URL } from '@/config/api';
 
 function downloadFile(url: string, filename: string) {
   fetch(url)
@@ -26,7 +27,7 @@ interface JobResultPanelProps {
 
 export function JobResultPanel({ jobId, onReset }: JobResultPanelProps) {
   const { data: result, isLoading, error } = useGetJobResultQuery(jobId);
-  const streamUrl = `${import.meta.env.VITE_API_BASE_URL}/upload/stream/${jobId}`;
+  const streamUrl = `${API_BASE_URL}/upload/stream/${jobId}`;
 
   if (isLoading) {
     return (

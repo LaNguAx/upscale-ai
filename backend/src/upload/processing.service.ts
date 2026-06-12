@@ -4,18 +4,30 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { UploadService } from './upload.service';
 
-const MOCK_PROGRESS_STEPS = [10, 25, 50, 75, 90, 100];
-const MOCK_STEP_DELAY_MS = 800;
-
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+interface AIHealthResponse {
+  status: string;
+  model_loaded?: boolean;
 }
+
+interface AIProcessUpdate {
+  status: 'processing' | 'completed' | 'failed' | 'cancelled';
+  progress?: number;
+  error?: string;
+}
+
+interface ActiveJob {
+  abortController: AbortController;
+  outputPath: string;
+}
+
+const AI_HEALTH_TIMEOUT_MS = 5000;
 
 @Injectable()
 export class ProcessingService {
   private readonly logger = new Logger(ProcessingService.name);
   private readonly aiServiceUrl: string;
   private readonly resultDir: string;
+  private readonly activeJobs = new Map<string, ActiveJob>();
 
   constructor(
     private readonly uploadService: UploadService,
@@ -32,6 +44,16 @@ export class ProcessingService {
   }
 
   async processJob(jobId: string): Promise<void> {
+    const existingJob = this.uploadService.getJobRecord(jobId);
+    if (!existingJob) {
+      this.logger.warn(`Job ${jobId}: record missing before processing start`);
+      return;
+    }
+    if (this.isTerminalState(existingJob.state)) {
+      this.logger.log(`Job ${jobId}: already terminal (${existingJob.state}), skipping`);
+      return;
+    }
+
     try {
       this.uploadService.updateJob(jobId, 'processing', 0);
 
@@ -43,23 +65,82 @@ export class ProcessingService {
 
       const ext = path.extname(job.storedFilename);
       const outputPath = path.resolve(this.resultDir, `${jobId}_enhanced${ext}`);
+      const abortController = new AbortController();
+      this.activeJobs.set(jobId, { abortController, outputPath });
 
-      const aiAvailable = await this.tryAIProcessing(
-        jobId,
-        job.uploadPath,
-        outputPath,
-      );
-
-      if (!aiAvailable) {
-        this.logger.warn(
-          `AI service unavailable — falling back to mock processing for job ${jobId}`,
-        );
-        await this.mockProcessing(jobId);
+      await this.assertAIReady(jobId, abortController);
+      if (this.isCancelled(jobId)) {
+        return;
       }
+      await this.tryAIProcessing(jobId, job.uploadPath, outputPath, abortController);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown error';
-      this.uploadService.updateJob(jobId, 'failed', 0, message);
-      this.logger.error(`Job ${jobId}: failed — ${message}`);
+      if (!this.isCancelled(jobId)) {
+        this.uploadService.updateJob(jobId, 'failed', 0, message);
+        this.logger.error(`Job ${jobId}: failed — ${message}`);
+      } else {
+        this.logger.log(`Job ${jobId}: cancelled`);
+      }
+    } finally {
+      this.activeJobs.delete(jobId);
+    }
+  }
+
+  async cancelJob(jobId: string): Promise<void> {
+    this.uploadService.cancelJob(jobId);
+
+    const activeJob = this.activeJobs.get(jobId);
+    if (activeJob) {
+      activeJob.abortController.abort();
+    }
+
+    try {
+      const response = await fetch(`${this.aiServiceUrl}/cancel`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jobId }),
+      });
+      if (!response.ok && response.status !== 404) {
+        this.logger.warn(`Cancel bridge to AI returned ${response.status} for job ${jobId}`);
+      }
+    } catch (error) {
+      this.logger.warn(
+        `Cancel bridge to AI failed for ${jobId}: ${error instanceof Error ? error.message : 'unknown error'}`,
+      );
+    }
+  }
+
+  private async assertAIReady(
+    jobId: string,
+    abortController: AbortController,
+  ): Promise<void> {
+    let response: Response;
+    try {
+      response = await fetch(`${this.aiServiceUrl}/health`, {
+        signal: this.buildSignal(abortController, AI_HEALTH_TIMEOUT_MS),
+      });
+    } catch (error) {
+      if (
+        error instanceof Error &&
+        error.name === 'AbortError' &&
+        this.isCancelled(jobId)
+      ) {
+        return;
+      }
+      throw new Error('AI service is unavailable. Please start the AI service and try again.');
+    }
+
+    if (!response.ok) {
+      throw new Error(
+        `AI service health check failed (${response.status} ${response.statusText})`,
+      );
+    }
+
+    const health = (await response.json()) as AIHealthResponse;
+    if (health.model_loaded !== true) {
+      throw new Error(
+        'AI model is not loaded. Ensure the checkpoint is available and restart the AI service.',
+      );
     }
   }
 
@@ -67,28 +148,28 @@ export class ProcessingService {
     jobId: string,
     inputPath: string,
     outputPath: string,
-  ): Promise<boolean> {
+    abortController: AbortController,
+  ): Promise<void> {
     let response: Response;
     try {
       response = await fetch(`${this.aiServiceUrl}/process`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          jobId,
           inputPath,
           outputPath,
           scale: 4,
           seqLen: 5,
           simulateLq: true,
         }),
+        signal: abortController.signal,
       });
-    } catch {
-      // AI service not running — ECONNREFUSED
-      return false;
-    }
-
-    if (response.status === 503) {
-      // Model not loaded
-      return false;
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError' && this.isCancelled(jobId)) {
+        return;
+      }
+      throw new Error('Failed to connect to AI service during inference request.');
     }
 
     if (!response.ok) {
@@ -103,6 +184,55 @@ export class ProcessingService {
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let buffer = '';
+    let completed = false;
+
+    const processUpdate = (update: AIProcessUpdate) => {
+      if (update.status === 'failed') {
+        throw new Error(update.error ?? 'AI processing failed');
+      }
+
+      if (update.status === 'cancelled') {
+        this.uploadService.updateJob(
+          jobId,
+          'cancelled',
+          update.progress ?? 0,
+          update.error ?? 'Upscaling cancelled by user',
+        );
+        return 'cancelled' as const;
+      }
+
+      if (update.progress !== undefined) {
+        if (this.isCancelled(jobId)) {
+          return 'cancelled' as const;
+        }
+        this.uploadService.updateJob(
+          jobId,
+          'processing',
+          update.progress,
+        );
+        this.logger.log(`Job ${jobId}: ${update.progress}%`);
+      }
+
+      if (update.status === 'completed') {
+        if (!fs.existsSync(outputPath)) {
+          throw new Error('AI reported completion but no output file was produced.');
+        }
+        if (this.isCancelled(jobId)) {
+          return 'cancelled' as const;
+        }
+        this.uploadService.setResultPath(jobId, outputPath);
+        this.uploadService.updateJob(jobId, 'completed', 100);
+        this.logger.log(`Job ${jobId}: completed (AI)`);
+        completed = true;
+        return 'completed' as const;
+      }
+
+      if (update.status !== 'processing') {
+        throw new Error(`AI service returned unknown status "${update.status}".`);
+      }
+
+      return 'continue' as const;
+    };
 
     while (true) {
       const { done, value } = await reader.read();
@@ -115,53 +245,60 @@ export class ProcessingService {
       for (const line of lines) {
         if (!line.trim()) continue;
 
-        const update = JSON.parse(line) as {
-          status: string;
-          progress?: number;
-          error?: string;
-        };
-
-        if (update.status === 'failed') {
-          throw new Error(update.error ?? 'AI processing failed');
+        let update: AIProcessUpdate;
+        try {
+          update = JSON.parse(line) as AIProcessUpdate;
+        } catch {
+          throw new Error('AI service returned malformed NDJSON progress payload.');
         }
 
-        if (update.progress !== undefined) {
-          this.uploadService.updateJob(jobId, 'processing', update.progress);
-          this.logger.log(`Job ${jobId}: ${update.progress}%`);
-        }
-
-        if (update.status === 'completed') {
-          this.uploadService.setResultPath(jobId, outputPath);
-          this.uploadService.updateJob(jobId, 'completed', 100);
-          this.logger.log(`Job ${jobId}: completed (AI)`);
-          return true;
+        const result = processUpdate(update);
+        if (result === 'completed' || result === 'cancelled') {
+          return;
         }
       }
     }
 
-    // Stream ended without explicit completed status — treat as completed
-    this.uploadService.setResultPath(jobId, outputPath);
-    this.uploadService.updateJob(jobId, 'completed', 100);
-    this.logger.log(`Job ${jobId}: completed (AI, stream ended)`);
-    return true;
-  }
-
-  private async mockProcessing(jobId: string): Promise<void> {
-    const job = this.uploadService.getJobRecord(jobId);
-    if (!job) return;
-
-    for (const progress of MOCK_PROGRESS_STEPS) {
-      await delay(MOCK_STEP_DELAY_MS);
-      this.uploadService.updateJob(jobId, 'processing', progress);
-      this.logger.log(`Job ${jobId}: ${progress}% (mock)`);
+    if (buffer.trim()) {
+      let update: AIProcessUpdate;
+      try {
+        update = JSON.parse(buffer) as AIProcessUpdate;
+      } catch {
+        throw new Error('AI service returned malformed NDJSON progress payload.');
+      }
+      const result = processUpdate(update);
+      if (result === 'completed' || result === 'cancelled') {
+        return;
+      }
     }
 
-    const ext = path.extname(job.storedFilename);
-    const outputPath = path.resolve(this.resultDir, `${jobId}_enhanced${ext}`);
-    fs.copyFileSync(job.uploadPath, outputPath);
+    if (!completed) {
+      throw new Error(
+        'AI processing stream ended without a completion event. Inference did not finish.',
+      );
+    }
+  }
 
-    this.uploadService.setResultPath(jobId, outputPath);
-    this.uploadService.updateJob(jobId, 'completed', 100);
-    this.logger.log(`Job ${jobId}: completed (mock)`);
+  private isCancelled(jobId: string): boolean {
+    return this.uploadService.getJobRecord(jobId)?.state === 'cancelled';
+  }
+
+  private isTerminalState(state: string): boolean {
+    return state === 'completed' || state === 'failed' || state === 'cancelled';
+  }
+
+  private buildSignal(
+    abortController: AbortController,
+    timeoutMs: number,
+  ): AbortSignal {
+    const timeoutSignal = AbortSignal.timeout(timeoutMs);
+    const anySignal = (
+      AbortSignal as typeof AbortSignal & {
+        any?: (signals: AbortSignal[]) => AbortSignal;
+      }
+    ).any;
+    return anySignal
+      ? anySignal([abortController.signal, timeoutSignal])
+      : abortController.signal;
   }
 }
