@@ -1,9 +1,5 @@
 {
   "mcpServers": {
-    "playwright": {
-      "command": "npx",
-      "args": ["@playwright/mcp@latest"]
-    },
     "claude.ai Context7": {
       "command": "npx",
       "args": ["-y", "@context7/mcp@latest"],
