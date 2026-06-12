@@ -63,9 +63,15 @@ Job state lives in an in-memory `Map` in `UploadService` — it does not survive
 | Command             | Scope | Purpose                                                                       |
 | ------------------- | ----- | ----------------------------------------------------------------------------- |
 | `pnpm dev`          | all   | Start all apps in watch mode via Turbo (frontend 5173, backend 3000, ai 8000) |
-| `pnpm build`        | all   | Build all packages and apps (bottom-up)                                       |
-| `pnpm preview`      | all   | Build, then run apps in local production rehearsal mode                       |
-| `pnpm start:prod`   | all   | Build, then run apps in pure production mode                                  |
+| `pnpm dev:web`         | web   | Start frontend + backend only (5173, 3000); includes shared `@repo/*` watchers |
+| `pnpm dev:ai`          | ai    | Start the Python AI service only (8000)                                          |
+| `pnpm build`           | all   | Build all packages and apps (bottom-up)                                          |
+| `pnpm preview`         | all   | Build, then run apps in local production rehearsal mode                          |
+| `pnpm preview:web`     | web   | Build, then run frontend + backend only                                          |
+| `pnpm preview:ai`      | ai    | Run the AI service in production mode (no reload)                                |
+| `pnpm start:prod`      | all   | Build, then run apps in pure production mode                                     |
+| `pnpm start:prod:web`  | web   | Build, then run frontend + backend in prod mode                                  |
+| `pnpm start:prod:ai`   | ai    | Run the AI service in production mode                                            |
 | `pnpm lint`         | all   | Lint everything (zero warnings enforced)                                      |
 | `pnpm check-types`  | all   | Type-check everything                                                         |
 | `pnpm format`       | all   | Format all files with Prettier                                                |
@@ -73,7 +79,7 @@ Job state lives in an in-memory `Map` in `UploadService` — it does not survive
 
 Single app: `pnpm --filter <name> <script>` (e.g. `pnpm --filter backend dev`).
 Backend tests: `pnpm --filter backend test:e2e`.
-The AI app only defines `dev`, `start:prod`, and `setup` — Turbo skips it for build/lint/check-types.
+The AI app defines `dev`, `preview`, `start:prod`, and `setup` — Turbo skips it for build/lint/check-types.
 
 ## Working style
 
