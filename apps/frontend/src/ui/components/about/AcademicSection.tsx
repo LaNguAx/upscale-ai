@@ -1,13 +1,19 @@
 import { GraduationCap, BookOpen, Users } from 'lucide-react';
 import { PageContainer } from '@/ui/components/PageContainer';
 import { SectionHeading } from '@/ui/components/SectionHeading';
-import { Card, CardHeader, CardTitle, CardDescription } from '@/ui/shadcn/ui/card';
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription
+} from '@/ui/shadcn/ui/card';
 
 const DETAILS = [
   {
     icon: GraduationCap,
     title: 'Institution',
-    description: 'The College of Management \u2013 Academic Studies, Faculty of Computer Science'
+    description:
+      'The College of Management \u2013 Academic Studies, Faculty of Computer Science'
   },
   {
     icon: BookOpen,
@@ -37,7 +43,9 @@ export function AcademicSection() {
                   <item.icon className="size-5" />
                 </div>
                 <CardTitle className="text-base">{item.title}</CardTitle>
-                <CardDescription className="text-sm">{item.description}</CardDescription>
+                <CardDescription className="text-sm">
+                  {item.description}
+                </CardDescription>
               </CardHeader>
             </Card>
           ))}

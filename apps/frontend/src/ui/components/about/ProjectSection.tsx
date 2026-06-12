@@ -8,16 +8,17 @@ export function ProjectSection() {
           About the Project
         </h1>
         <p className="mx-auto mt-6 max-w-2xl text-lg leading-relaxed text-muted-foreground">
-          Upscale AI is a B.Sc. Computer Science final project specializing in Deep Learning,
-          developed at The College of Management &ndash; Academic Studies. The project explores
-          deep-learning-based video restoration and super-resolution, bridging the gap between
-          academic research and practical, end-to-end enhancement systems.
+          Upscale AI is a B.Sc. Computer Science final project specializing in
+          Deep Learning, developed at The College of Management &ndash; Academic
+          Studies. The project explores deep-learning-based video restoration
+          and super-resolution, bridging the gap between academic research and
+          practical, end-to-end enhancement systems.
         </p>
         <p className="mx-auto mt-4 max-w-2xl text-base leading-relaxed text-muted-foreground">
-          Our goal is to restore legacy and archival video content &mdash; old films, documentaries,
-          and historical recordings &mdash; by training convolutional neural networks on
-          synthetically degraded data and evaluating their ability to generalize to real-world
-          footage.
+          Our goal is to restore legacy and archival video content &mdash; old
+          films, documentaries, and historical recordings &mdash; by training
+          convolutional neural networks on synthetically degraded data and
+          evaluating their ability to generalize to real-world footage.
         </p>
       </PageContainer>
     </section>

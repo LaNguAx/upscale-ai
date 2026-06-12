@@ -170,10 +170,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
 
     if (exception instanceof HttpException) {
       const rawBody = exception.getResponse();
-      const { detail, errors } = normalizeHttpResponse(
-        rawBody,
-        problem.status
-      );
+      const { detail, errors } = normalizeHttpResponse(rawBody, problem.status);
       const detailPart = detail ? ` — ${detail}` : '';
       const errorsPart =
         Array.isArray(errors) && errors.length > 0

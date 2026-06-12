@@ -1,7 +1,12 @@
 import { FEATURES } from '@/consts/features';
 import { PageContainer } from '@/ui/components/PageContainer';
 import { SectionHeading } from '@/ui/components/SectionHeading';
-import { Card, CardHeader, CardTitle, CardDescription } from '@/ui/shadcn/ui/card';
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription
+} from '@/ui/shadcn/ui/card';
 
 export function FeaturesSection() {
   return (

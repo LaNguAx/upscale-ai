@@ -19,7 +19,9 @@ export function Navbar() {
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
         <Link to="/" className="flex items-center gap-2.5">
           <img src="/upscale-logo.png" alt="Upscale AI" className="h-8 w-8" />
-          <span className="text-lg font-bold tracking-tight text-foreground">Upscale AI</span>
+          <span className="text-lg font-bold tracking-tight text-foreground">
+            Upscale AI
+          </span>
         </Link>
 
         <nav className="hidden items-center gap-1 md:flex">
@@ -31,7 +33,9 @@ export function Navbar() {
               className={({ isActive }) =>
                 cn(
                   'rounded-md px-3 py-2 text-sm font-medium transition-colors',
-                  isActive ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
+                  isActive
+                    ? 'text-primary'
+                    : 'text-muted-foreground hover:text-foreground'
                 )
               }
             >
@@ -60,7 +64,9 @@ export function Navbar() {
                     to={`/products/${product.slug}`}
                     className={cn(
                       'flex items-center gap-2.5 rounded-sm px-2 py-1.5 text-sm transition-colors hover:bg-accent hover:text-accent-foreground',
-                      product.isWip ? 'text-muted-foreground' : 'text-popover-foreground'
+                      product.isWip
+                        ? 'text-muted-foreground'
+                        : 'text-popover-foreground'
                     )}
                   >
                     <product.icon className="size-4 text-muted-foreground" />
@@ -100,7 +106,9 @@ export function Navbar() {
               className={({ isActive }) =>
                 cn(
                   'rounded-md px-3 py-2 text-sm font-medium transition-colors',
-                  isActive ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
+                  isActive
+                    ? 'text-primary'
+                    : 'text-muted-foreground hover:text-foreground'
                 )
               }
             >
@@ -122,7 +130,9 @@ export function Navbar() {
           variant="ghost"
           size="icon"
           className="md:hidden"
-          onClick={() => { setMobileOpen(!mobileOpen); }}
+          onClick={() => {
+            setMobileOpen(!mobileOpen);
+          }}
           aria-label="Toggle menu"
         >
           {mobileOpen ? <X className="size-5" /> : <Menu className="size-5" />}
@@ -137,7 +147,9 @@ export function Navbar() {
                 key={link.to}
                 to={link.to}
                 end={link.to === '/'}
-                onClick={() => { setMobileOpen(false); }}
+                onClick={() => {
+                  setMobileOpen(false);
+                }}
                 className={({ isActive }) =>
                   cn(
                     'rounded-md px-3 py-2 text-sm font-medium transition-colors',
@@ -158,7 +170,9 @@ export function Navbar() {
               <NavLink
                 key={product.slug}
                 to={`/products/${product.slug}`}
-                onClick={() => { setMobileOpen(false); }}
+                onClick={() => {
+                  setMobileOpen(false);
+                }}
                 className={({ isActive }) =>
                   cn(
                     'flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition-colors',
@@ -191,7 +205,9 @@ export function Navbar() {
               <NavLink
                 key={link.to}
                 to={link.to}
-                onClick={() => { setMobileOpen(false); }}
+                onClick={() => {
+                  setMobileOpen(false);
+                }}
                 className={({ isActive }) =>
                   cn(
                     'rounded-md px-3 py-2 text-sm font-medium transition-colors',
@@ -206,7 +222,12 @@ export function Navbar() {
             ))}
 
             <Button asChild size="sm" className="mt-2">
-              <Link to="/products/pro" onClick={() => { setMobileOpen(false); }}>
+              <Link
+                to="/products/pro"
+                onClick={() => {
+                  setMobileOpen(false);
+                }}
+              >
                 <Crown className="size-3.5" data-icon="inline-start" />
                 Try Pro
               </Link>

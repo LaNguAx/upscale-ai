@@ -8,7 +8,8 @@ export const store = configureStore({
     job: jobReducer,
     [upscaleApi.reducerPath]: upscaleApi.reducer
   },
-  middleware: (getDefaultMiddleware) => getDefaultMiddleware().concat(upscaleApi.middleware)
+  middleware: (getDefaultMiddleware) =>
+    getDefaultMiddleware().concat(upscaleApi.middleware)
 });
 
 setupListeners(store.dispatch);

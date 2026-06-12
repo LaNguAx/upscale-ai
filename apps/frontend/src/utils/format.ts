@@ -10,7 +10,5 @@ export function formatDuration(seconds: number): string {
   if (seconds < 60) return `${String(Math.round(seconds))}s`;
   const mins = Math.floor(seconds / 60);
   const secs = Math.round(seconds % 60);
-  return secs > 0
-    ? `${String(mins)}m ${String(secs)}s`
-    : `${String(mins)}m`;
+  return secs > 0 ? `${String(mins)}m ${String(secs)}s` : `${String(mins)}m`;
 }

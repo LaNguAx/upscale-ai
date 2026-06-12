@@ -18,9 +18,10 @@ export function HeroSection() {
               <span className="text-primary">with AI</span>
             </h1>
             <p className="mt-6 text-lg leading-relaxed text-muted-foreground">
-              Breathe new life into old films, archival footage, and legacy recordings. Our deep
-              learning pipeline enhances resolution, removes noise, and eliminates artifacts while
-              preserving temporal consistency.
+              Breathe new life into old films, archival footage, and legacy
+              recordings. Our deep learning pipeline enhances resolution,
+              removes noise, and eliminates artifacts while preserving temporal
+              consistency.
             </p>
             <div className="mt-8 flex flex-wrap gap-4">
               <Button asChild size="lg">
@@ -45,7 +46,10 @@ export function HeroSection() {
                   <div className="flex flex-col items-center gap-2 text-muted-foreground">
                     <div className="grid grid-cols-3 gap-1 opacity-40">
                       {Array.from({ length: 9 }).map((_, i) => (
-                        <div key={i} className="size-4 rounded-sm bg-muted-foreground/30 sm:size-5" />
+                        <div
+                          key={i}
+                          className="size-4 rounded-sm bg-muted-foreground/30 sm:size-5"
+                        />
                       ))}
                     </div>
                     <span className="text-xs">Low Quality</span>
@@ -58,7 +62,10 @@ export function HeroSection() {
                   <div className="flex flex-col items-center gap-2 text-primary">
                     <div className="grid grid-cols-3 gap-1">
                       {Array.from({ length: 9 }).map((_, i) => (
-                        <div key={i} className="size-4 rounded-sm bg-primary/25 sm:size-5" />
+                        <div
+                          key={i}
+                          className="size-4 rounded-sm bg-primary/25 sm:size-5"
+                        />
                       ))}
                     </div>
                     <span className="text-xs font-medium">Enhanced</span>

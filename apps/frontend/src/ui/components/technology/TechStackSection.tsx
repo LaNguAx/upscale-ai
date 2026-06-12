@@ -1,6 +1,11 @@
 import { PageContainer } from '@/ui/components/PageContainer';
 import { SectionHeading } from '@/ui/components/SectionHeading';
-import { Card, CardHeader, CardTitle, CardDescription } from '@/ui/shadcn/ui/card';
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription
+} from '@/ui/shadcn/ui/card';
 import { Badge } from '@/ui/shadcn/ui/badge';
 
 const STACK = [
@@ -62,7 +67,10 @@ export function TechStackSection() {
               <CardHeader className="pb-4">
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-base">{item.name}</CardTitle>
-                  <Badge variant="secondary" className={LAYER_COLORS[item.layer]}>
+                  <Badge
+                    variant="secondary"
+                    className={LAYER_COLORS[item.layer]}
+                  >
                     {item.layer}
                   </Badge>
                 </div>

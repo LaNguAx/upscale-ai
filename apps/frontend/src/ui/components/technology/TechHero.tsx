@@ -12,8 +12,9 @@ export function TechHero() {
           The Technology Behind Upscale AI
         </h1>
         <p className="mx-auto mt-4 max-w-2xl text-lg text-muted-foreground">
-          A deep learning pipeline that processes video frame-by-frame using temporal windows,
-          restoring quality while maintaining smooth, consistent motion.
+          A deep learning pipeline that processes video frame-by-frame using
+          temporal windows, restoring quality while maintaining smooth,
+          consistent motion.
         </p>
         <div className="mx-auto mt-8 grid max-w-3xl gap-6 text-left sm:grid-cols-3">
           <div className="rounded-lg border border-border bg-background/60 p-4 backdrop-blur-sm">

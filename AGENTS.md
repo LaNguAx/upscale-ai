@@ -60,16 +60,16 @@ Job state lives in an in-memory `Map` in `UploadService` — it does not survive
 
 ## Commands
 
-| Command             | Scope | Purpose                                  |
-| ------------------- | ----- | ---------------------------------------- |
+| Command             | Scope | Purpose                                                                       |
+| ------------------- | ----- | ----------------------------------------------------------------------------- |
 | `pnpm dev`          | all   | Start all apps in watch mode via Turbo (frontend 5173, backend 3000, ai 8000) |
-| `pnpm build`        | all   | Build all packages and apps (bottom-up)  |
-| `pnpm preview`      | all   | Build, then run apps in local production rehearsal mode |
-| `pnpm start:prod`   | all   | Build, then run apps in pure production mode |
-| `pnpm lint`         | all   | Lint everything (zero warnings enforced) |
-| `pnpm check-types`  | all   | Type-check everything                    |
-| `pnpm format`       | all   | Format all files with Prettier           |
-| `pnpm format:check` | all   | Check formatting without writing         |
+| `pnpm build`        | all   | Build all packages and apps (bottom-up)                                       |
+| `pnpm preview`      | all   | Build, then run apps in local production rehearsal mode                       |
+| `pnpm start:prod`   | all   | Build, then run apps in pure production mode                                  |
+| `pnpm lint`         | all   | Lint everything (zero warnings enforced)                                      |
+| `pnpm check-types`  | all   | Type-check everything                                                         |
+| `pnpm format`       | all   | Format all files with Prettier                                                |
+| `pnpm format:check` | all   | Check formatting without writing                                              |
 
 Single app: `pnpm --filter <name> <script>` (e.g. `pnpm --filter backend dev`).
 Backend tests: `pnpm --filter backend test:e2e`.

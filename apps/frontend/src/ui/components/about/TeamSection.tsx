@@ -1,6 +1,11 @@
 import { PageContainer } from '@/ui/components/PageContainer';
 import { SectionHeading } from '@/ui/components/SectionHeading';
-import { Card, CardHeader, CardTitle, CardDescription } from '@/ui/shadcn/ui/card';
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription
+} from '@/ui/shadcn/ui/card';
 
 const TEAM = [
   {
@@ -39,7 +44,9 @@ export function TeamSection() {
                   {member.initials}
                 </div>
                 <CardTitle className="text-base">{member.name}</CardTitle>
-                <p className="text-sm font-medium text-primary">{member.role}</p>
+                <p className="text-sm font-medium text-primary">
+                  {member.role}
+                </p>
                 <CardDescription className="mt-2 text-sm leading-relaxed">
                   {member.bio}
                 </CardDescription>

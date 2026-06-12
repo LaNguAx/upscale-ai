@@ -10,15 +10,10 @@ export function CTASection() {
           Ready to enhance your videos?
         </h2>
         <p className="mt-4 text-base text-primary-foreground/80">
-          Upload your video and let our deep learning model do the rest. No technical expertise
-          required.
+          Upload your video and let our deep learning model do the rest. No
+          technical expertise required.
         </p>
-        <Button
-          asChild
-          variant="secondary"
-          size="lg"
-          className="mt-8"
-        >
+        <Button asChild variant="secondary" size="lg" className="mt-8">
           <Link to="/products">
             Get Started
             <ArrowRight className="size-4" data-icon="inline-end" />

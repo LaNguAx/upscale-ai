@@ -33,14 +33,14 @@ export class ProcessingService {
 
   constructor(
     private readonly uploadService: UploadService,
-    private readonly configService: ConfigService<Env, true>,
+    private readonly configService: ConfigService<Env, true>
   ) {
     this.aiServiceUrl = this.configService.get('AI_SERVICE_URL', {
-      infer: true,
+      infer: true
     });
     this.resultDir = path.resolve(
       process.cwd(),
-      this.configService.get('RESULT_DIR', { infer: true }),
+      this.configService.get('RESULT_DIR', { infer: true })
     );
   }
 
@@ -51,7 +51,9 @@ export class ProcessingService {
       return;
     }
     if (isTerminalJobState(existingJob.state)) {
-      this.logger.log(`Job ${jobId}: already terminal (${existingJob.state}), skipping`);
+      this.logger.log(
+        `Job ${jobId}: already terminal (${existingJob.state}), skipping`
+      );
       return;
     }
 
@@ -60,12 +62,20 @@ export class ProcessingService {
 
       const job = this.uploadService.getJobRecord(jobId);
       if (!job) {
-        this.uploadService.updateJob(jobId, 'failed', 0, 'Job record not found');
+        this.uploadService.updateJob(
+          jobId,
+          'failed',
+          0,
+          'Job record not found'
+        );
         return;
       }
 
       const ext = path.extname(job.storedFilename);
-      const outputPath = path.resolve(this.resultDir, `${jobId}_enhanced${ext}`);
+      const outputPath = path.resolve(
+        this.resultDir,
+        `${jobId}_enhanced${ext}`
+      );
       const abortController = new AbortController();
       this.activeJobs.set(jobId, { abortController, outputPath });
 
@@ -73,7 +83,12 @@ export class ProcessingService {
       if (this.isCancelled(jobId)) {
         return;
       }
-      await this.tryAIProcessing(jobId, job.uploadPath, outputPath, abortController);
+      await this.tryAIProcessing(
+        jobId,
+        job.uploadPath,
+        outputPath,
+        abortController
+      );
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown error';
       if (!this.isCancelled(jobId)) {
@@ -99,28 +114,28 @@ export class ProcessingService {
       const response = await fetch(`${this.aiServiceUrl}/cancel`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ jobId }),
+        body: JSON.stringify({ jobId })
       });
       if (!response.ok && response.status !== 404) {
         this.logger.warn(
-          `Cancel bridge to AI returned ${String(response.status)} for job ${jobId}`,
+          `Cancel bridge to AI returned ${String(response.status)} for job ${jobId}`
         );
       }
     } catch (error) {
       this.logger.warn(
-        `Cancel bridge to AI failed for ${jobId}: ${error instanceof Error ? error.message : 'unknown error'}`,
+        `Cancel bridge to AI failed for ${jobId}: ${error instanceof Error ? error.message : 'unknown error'}`
       );
     }
   }
 
   private async assertAIReady(
     jobId: string,
-    abortController: AbortController,
+    abortController: AbortController
   ): Promise<void> {
     let response: Response;
     try {
       response = await fetch(`${this.aiServiceUrl}/health`, {
-        signal: this.buildSignal(abortController, AI_HEALTH_TIMEOUT_MS),
+        signal: this.buildSignal(abortController, AI_HEALTH_TIMEOUT_MS)
       });
     } catch (error) {
       if (
@@ -130,19 +145,21 @@ export class ProcessingService {
       ) {
         return;
       }
-      throw new Error('AI service is unavailable. Please start the AI service and try again.');
+      throw new Error(
+        'AI service is unavailable. Please start the AI service and try again.'
+      );
     }
 
     if (!response.ok) {
       throw new Error(
-        `AI service health check failed (${String(response.status)} ${response.statusText})`,
+        `AI service health check failed (${String(response.status)} ${response.statusText})`
       );
     }
 
     const health = (await response.json()) as AIHealthResponse;
     if (health.model_loaded !== true) {
       throw new Error(
-        'AI model is not loaded. Ensure the checkpoint is available and restart the AI service.',
+        'AI model is not loaded. Ensure the checkpoint is available and restart the AI service.'
       );
     }
   }
@@ -151,7 +168,7 @@ export class ProcessingService {
     jobId: string,
     inputPath: string,
     outputPath: string,
-    abortController: AbortController,
+    abortController: AbortController
   ): Promise<void> {
     let response: Response;
     try {
@@ -164,20 +181,26 @@ export class ProcessingService {
           jobId,
           inputPath,
           outputPath,
-          scale: 4,
+          scale: 4
         }),
-        signal: abortController.signal,
+        signal: abortController.signal
       });
     } catch (error) {
-      if (error instanceof Error && error.name === 'AbortError' && this.isCancelled(jobId)) {
+      if (
+        error instanceof Error &&
+        error.name === 'AbortError' &&
+        this.isCancelled(jobId)
+      ) {
         return;
       }
-      throw new Error('Failed to connect to AI service during inference request.');
+      throw new Error(
+        'Failed to connect to AI service during inference request.'
+      );
     }
 
     if (!response.ok) {
       throw new Error(
-        `AI service returned ${String(response.status)}: ${response.statusText}`,
+        `AI service returned ${String(response.status)}: ${response.statusText}`
       );
     }
 
@@ -202,7 +225,7 @@ export class ProcessingService {
           jobId,
           'cancelled',
           update.progress ?? 0,
-          update.error ?? 'Upscaling cancelled by user',
+          update.error ?? 'Upscaling cancelled by user'
         );
         return 'cancelled' as const;
       }
@@ -211,17 +234,15 @@ export class ProcessingService {
         if (this.isCancelled(jobId)) {
           return 'cancelled' as const;
         }
-        this.uploadService.updateJob(
-          jobId,
-          'processing',
-          update.progress,
-        );
+        this.uploadService.updateJob(jobId, 'processing', update.progress);
         this.logger.log(`Job ${jobId}: ${String(update.progress)}%`);
       }
 
       if (update.status === 'completed') {
         if (!fs.existsSync(outputPath)) {
-          throw new Error('AI reported completion but no output file was produced.');
+          throw new Error(
+            'AI reported completion but no output file was produced.'
+          );
         }
         if (this.isCancelled(jobId)) {
           return 'cancelled' as const;
@@ -250,7 +271,9 @@ export class ProcessingService {
         try {
           update = JSON.parse(line) as AIProcessUpdate;
         } catch {
-          throw new Error('AI service returned malformed NDJSON progress payload.');
+          throw new Error(
+            'AI service returned malformed NDJSON progress payload.'
+          );
         }
 
         const result = processUpdate(update);
@@ -265,7 +288,9 @@ export class ProcessingService {
       try {
         update = JSON.parse(buffer) as AIProcessUpdate;
       } catch {
-        throw new Error('AI service returned malformed NDJSON progress payload.');
+        throw new Error(
+          'AI service returned malformed NDJSON progress payload.'
+        );
       }
       const result = processUpdate(update);
       if (result === 'completed' || result === 'cancelled') {
@@ -277,7 +302,7 @@ export class ProcessingService {
     // buffer handling above), so reaching this point means the stream ended
     // without a terminal event.
     throw new Error(
-      'AI processing stream ended without a completion event. Inference did not finish.',
+      'AI processing stream ended without a completion event. Inference did not finish.'
     );
   }
 
@@ -289,11 +314,11 @@ export class ProcessingService {
 
   private buildSignal(
     abortController: AbortController,
-    timeoutMs: number,
+    timeoutMs: number
   ): AbortSignal {
     return AbortSignal.any([
       abortController.signal,
-      AbortSignal.timeout(timeoutMs),
+      AbortSignal.timeout(timeoutMs)
     ]);
   }
 }

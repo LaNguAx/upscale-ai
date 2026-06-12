@@ -6,7 +6,13 @@ import { Button } from '@/ui/shadcn/ui/button';
 import { Progress } from '@/ui/shadcn/ui/progress';
 import { formatFileSize } from '@/utils/format';
 
-const ACCEPTED_TYPES = ['video/mp4', 'video/x-msvideo', 'video/x-matroska', 'video/quicktime', 'video/webm'];
+const ACCEPTED_TYPES = [
+  'video/mp4',
+  'video/x-msvideo',
+  'video/x-matroska',
+  'video/quicktime',
+  'video/webm'
+];
 const MAX_SIZE = 500 * 1024 * 1024;
 
 interface VideoUploadFormProps {
@@ -15,7 +21,11 @@ interface VideoUploadFormProps {
   uploadProgress?: number;
 }
 
-export function VideoUploadForm({ onUpload, isUploading, uploadProgress = 0 }: VideoUploadFormProps) {
+export function VideoUploadForm({
+  onUpload,
+  isUploading,
+  uploadProgress = 0
+}: VideoUploadFormProps) {
   const [file, setFile] = useState<File | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -80,7 +90,9 @@ export function VideoUploadForm({ onUpload, isUploading, uploadProgress = 0 }: V
           e.preventDefault();
           setDragOver(true);
         }}
-        onDragLeave={() => { setDragOver(false); }}
+        onDragLeave={() => {
+          setDragOver(false);
+        }}
         onDrop={handleDrop}
         onClick={() => !file && inputRef.current?.click()}
         className={cn(
@@ -106,8 +118,12 @@ export function VideoUploadForm({ onUpload, isUploading, uploadProgress = 0 }: V
               <FileVideo className="size-6" />
             </div>
             <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-medium text-foreground">{file.name}</p>
-              <p className="text-xs text-muted-foreground">{formatFileSize(file.size)}</p>
+              <p className="truncate text-sm font-medium text-foreground">
+                {file.name}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {formatFileSize(file.size)}
+              </p>
             </div>
             <Button
               variant="ghost"
@@ -129,7 +145,8 @@ export function VideoUploadForm({ onUpload, isUploading, uploadProgress = 0 }: V
               Drag &amp; drop your video here
             </p>
             <p className="mt-1 text-xs text-muted-foreground">
-              or click to browse &middot; MP4, AVI, MKV, MOV, WebM &middot; up to 500 MB
+              or click to browse &middot; MP4, AVI, MKV, MOV, WebM &middot; up
+              to 500 MB
             </p>
           </>
         )}

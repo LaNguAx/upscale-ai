@@ -7,7 +7,13 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/ui/shadcn/ui/card';
 import { Button } from '@/ui/shadcn/ui/button';
 import { cn } from '@/ui/shadcn/lib/utils';
 import { formatDistanceToNow } from 'date-fns';
-import { Loader2, CheckCircle2, XCircle, Clock, CircleStop } from 'lucide-react';
+import {
+  Loader2,
+  CheckCircle2,
+  XCircle,
+  Clock,
+  CircleStop
+} from 'lucide-react';
 import { UPLOAD_EVENTS_ENDPOINT } from '@repo/consts/upload';
 import { getJobStatusContract } from '@repo/contracts/upload';
 import { jobUpdateSchema } from '@repo/schemas/jobs';
@@ -25,7 +31,11 @@ interface JobStatusPanelProps {
 
 const STATUS_CONFIG: Record<
   JobState,
-  { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline'; icon: typeof Clock }
+  {
+    label: string;
+    variant: 'default' | 'secondary' | 'destructive' | 'outline';
+    icon: typeof Clock;
+  }
 > = {
   queued: { label: 'Queued', variant: 'outline', icon: Clock },
   processing: { label: 'Processing', variant: 'secondary', icon: Loader2 },
@@ -89,12 +99,12 @@ export function JobStatusPanel({
         stopPolling();
         if (isStoppingRef.current) {
           onFailedRef.current(
-            'Stop request was sent, but cancellation status could not be confirmed. Please refresh or try again.',
+            'Stop request was sent, but cancellation status could not be confirmed. Please refresh or try again.'
           );
           return;
         }
         onFailedRef.current(
-          'Lost connection to live updates and could not recover job status.',
+          'Lost connection to live updates and could not recover job status.'
         );
       };
 
@@ -153,7 +163,11 @@ export function JobStatusPanel({
 
       setStatus(data);
 
-      if (data.state === 'completed' || data.state === 'cancelled' || data.state === 'failed') {
+      if (
+        data.state === 'completed' ||
+        data.state === 'cancelled' ||
+        data.state === 'failed'
+      ) {
         es.close();
         stopPolling();
         handleTerminalState(data);
@@ -197,7 +211,10 @@ export function JobStatusPanel({
           <CardTitle className="text-base">Processing Video</CardTitle>
           <Badge variant={config.variant}>
             <StatusIcon
-              className={cn('mr-1 size-3', status.state === 'processing' && 'animate-spin')}
+              className={cn(
+                'mr-1 size-3',
+                status.state === 'processing' && 'animate-spin'
+              )}
             />
             {config.label}
           </Badge>
@@ -224,7 +241,12 @@ export function JobStatusPanel({
 
         <div className="flex items-center justify-between text-xs text-muted-foreground">
           <span>Job ID: {jobId.slice(0, 8)}...</span>
-          <span>Started {formatDistanceToNow(new Date(status.updatedAt), { addSuffix: true })}</span>
+          <span>
+            Started{' '}
+            {formatDistanceToNow(new Date(status.updatedAt), {
+              addSuffix: true
+            })}
+          </span>
         </div>
 
         {status.state === 'failed' && status.error && (

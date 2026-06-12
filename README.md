@@ -54,15 +54,15 @@ Swagger UI is served at `http://localhost:3000/docs` in development.
 
 ## Commands
 
-| Command            | Purpose                                                |
-| ------------------ | ------------------------------------------------------ |
-| `pnpm dev`         | Start all apps in watch mode                           |
-| `pnpm build`       | Build all packages and apps (bottom-up, cached)        |
-| `pnpm preview`     | Build, then run in local production-rehearsal mode     |
-| `pnpm start:prod`  | Build, then run in pure production mode                |
-| `pnpm lint`        | Lint everything (`--max-warnings 0`)                   |
-| `pnpm check-types` | Type-check everything                                  |
-| `pnpm format`      | Prettier-format the repo                               |
+| Command            | Purpose                                            |
+| ------------------ | -------------------------------------------------- |
+| `pnpm dev`         | Start all apps in watch mode                       |
+| `pnpm build`       | Build all packages and apps (bottom-up, cached)    |
+| `pnpm preview`     | Build, then run in local production-rehearsal mode |
+| `pnpm start:prod`  | Build, then run in pure production mode            |
+| `pnpm lint`        | Lint everything (`--max-warnings 0`)               |
+| `pnpm check-types` | Type-check everything                              |
+| `pnpm format`      | Prettier-format the repo                           |
 
 Filter to one app: `pnpm --filter backend dev`, `pnpm --filter backend test:e2e`, etc.
 

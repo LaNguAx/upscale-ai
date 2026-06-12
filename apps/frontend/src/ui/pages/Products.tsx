@@ -2,7 +2,12 @@ import { Link } from 'react-router';
 import { ArrowRight, Crown } from 'lucide-react';
 import { PageContainer } from '@/ui/components/PageContainer';
 import { SectionHeading } from '@/ui/components/SectionHeading';
-import { Card, CardHeader, CardTitle, CardDescription } from '@/ui/shadcn/ui/card';
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription
+} from '@/ui/shadcn/ui/card';
 import { Badge } from '@/ui/shadcn/ui/badge';
 import { Button } from '@/ui/shadcn/ui/button';
 import { PRODUCTS } from '@/consts/products';
@@ -20,7 +25,8 @@ export function Products() {
             Our Products
           </h1>
           <p className="mx-auto mt-4 max-w-2xl text-lg text-muted-foreground">
-            Choose the right tool for your video restoration needs, or go all-in with Upscale Pro.
+            Choose the right tool for your video restoration needs, or go all-in
+            with Upscale Pro.
           </p>
         </PageContainer>
       </section>
@@ -33,7 +39,11 @@ export function Products() {
           />
           <div className="grid gap-6 sm:grid-cols-2">
             {freeProducts.map((product) => (
-              <Link key={product.slug} to={`/products/${product.slug}`} className="group">
+              <Link
+                key={product.slug}
+                to={`/products/${product.slug}`}
+                className="group"
+              >
                 <Card
                   className={cn(
                     'h-full transition-all hover:shadow-md hover:border-primary/30',
@@ -47,7 +57,10 @@ export function Products() {
                     <CardTitle className="flex items-center gap-2 text-base">
                       {product.name}
                       {product.isWip ? (
-                        <Badge variant="outline" className="text-[10px] font-semibold">
+                        <Badge
+                          variant="outline"
+                          className="text-[10px] font-semibold"
+                        >
                           Coming Soon
                         </Badge>
                       ) : (
@@ -80,7 +93,9 @@ export function Products() {
                   <Crown className="size-8" />
                 </div>
                 <div className="flex items-center gap-2">
-                  <CardTitle className="text-2xl sm:text-3xl">{proProduct.name}</CardTitle>
+                  <CardTitle className="text-2xl sm:text-3xl">
+                    {proProduct.name}
+                  </CardTitle>
                   <Badge className="bg-gradient-to-r from-amber-500 to-amber-600 text-white border-0 text-xs font-bold">
                     PRO
                   </Badge>
@@ -96,10 +111,16 @@ export function Products() {
                       {p.shortName}
                     </Badge>
                   ))}
-                  <span className="text-xs text-muted-foreground">— all in one pass</span>
+                  <span className="text-xs text-muted-foreground">
+                    — all in one pass
+                  </span>
                 </div>
 
-                <Button asChild size="lg" className="mt-8 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white border-0">
+                <Button
+                  asChild
+                  size="lg"
+                  className="mt-8 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white border-0"
+                >
                   <Link to="/products/pro">
                     <Crown className="size-4" data-icon="inline-start" />
                     Try Upscale Pro

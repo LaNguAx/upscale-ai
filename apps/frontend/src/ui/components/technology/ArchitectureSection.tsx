@@ -13,10 +13,22 @@ const TOPICS = [
       'Our baseline architecture takes a fixed-size window of consecutive frames (e.g. 7 frames) and concatenates them along the channel dimension. A standard RGB frame has 3 channels — so 7 frames produce a 21-channel input tensor. This tensor is passed through a series of convolutional layers that learn to extract and merge spatio-temporal features across all frames simultaneously.'
     ],
     highlights: [
-      { label: 'Input', value: 'N consecutive frames concatenated (N × 3 channels)' },
-      { label: 'Output', value: 'Single enhanced central frame at target resolution' },
-      { label: 'Alignment', value: 'Implicit — learned by convolutions, no explicit optical flow' },
-      { label: 'Upscaling', value: 'Sub-pixel convolution layers for 2× or 4× super-resolution' }
+      {
+        label: 'Input',
+        value: 'N consecutive frames concatenated (N × 3 channels)'
+      },
+      {
+        label: 'Output',
+        value: 'Single enhanced central frame at target resolution'
+      },
+      {
+        label: 'Alignment',
+        value: 'Implicit — learned by convolutions, no explicit optical flow'
+      },
+      {
+        label: 'Upscaling',
+        value: 'Sub-pixel convolution layers for 2× or 4× super-resolution'
+      }
     ]
   },
   {
@@ -28,10 +40,22 @@ const TOPICS = [
       'Perceptual Loss is an optional secondary objective. Instead of comparing pixels directly, it passes both the predicted and ground-truth frames through a pretrained classification network (e.g. VGG) and compares their internal feature representations. This encourages the output to match the high-level visual structure, texture, and style of the ground truth — capturing qualities that pixel-wise metrics miss.'
     ],
     highlights: [
-      { label: 'L1 Loss', value: 'Pixel-wise accuracy, sharp edges, stable training' },
-      { label: 'Perceptual Loss', value: 'Texture fidelity, structural similarity, visual realism' },
-      { label: 'Composition', value: 'Weighted sum — weights are tunable per experiment' },
-      { label: 'Temporal', value: 'Implicitly enforced via consecutive-frame training pairs' }
+      {
+        label: 'L1 Loss',
+        value: 'Pixel-wise accuracy, sharp edges, stable training'
+      },
+      {
+        label: 'Perceptual Loss',
+        value: 'Texture fidelity, structural similarity, visual realism'
+      },
+      {
+        label: 'Composition',
+        value: 'Weighted sum — weights are tunable per experiment'
+      },
+      {
+        label: 'Temporal',
+        value: 'Implicitly enforced via consecutive-frame training pairs'
+      }
     ]
   },
   {
@@ -43,9 +67,18 @@ const TOPICS = [
       'SSIM (Structural Similarity Index) goes beyond pixel differences by measuring changes in structural information, luminance, and contrast. It better reflects perceived image quality by considering how humans perceive visual patterns. We also use perceptual metrics based on deep feature distances for a more holistic assessment. All quantitative metrics are complemented by visual inspection on real legacy footage.'
     ],
     highlights: [
-      { label: 'PSNR', value: 'Pixel-level fidelity (dB scale, higher is better)' },
-      { label: 'SSIM', value: 'Structural similarity (0–1 scale, closer to 1 is better)' },
-      { label: 'Perceptual', value: 'Deep feature distance from pretrained networks' },
+      {
+        label: 'PSNR',
+        value: 'Pixel-level fidelity (dB scale, higher is better)'
+      },
+      {
+        label: 'SSIM',
+        value: 'Structural similarity (0–1 scale, closer to 1 is better)'
+      },
+      {
+        label: 'Perceptual',
+        value: 'Deep feature distance from pretrained networks'
+      },
       { label: 'Visual', value: 'Human inspection on real degraded footage' }
     ]
   },
@@ -58,10 +91,22 @@ const TOPICS = [
       'The model is trained on short clips of consecutive frames (not full videos) to keep memory requirements manageable. The dataset is split into training, validation, and test subsets. The validation set guides hyperparameter tuning and model selection, while the test set is reserved for final evaluation — never seen during training. This ensures results are not overfit to the training distribution.'
     ],
     highlights: [
-      { label: 'Approach', value: 'Supervised learning with synthetic degradation pairs' },
-      { label: 'Degradations', value: 'Downscaling + noise + blur + compression artifacts' },
-      { label: 'Data split', value: 'Train / validation / test — strict separation' },
-      { label: 'Generalization', value: 'Tested on real legacy footage not seen during training' }
+      {
+        label: 'Approach',
+        value: 'Supervised learning with synthetic degradation pairs'
+      },
+      {
+        label: 'Degradations',
+        value: 'Downscaling + noise + blur + compression artifacts'
+      },
+      {
+        label: 'Data split',
+        value: 'Train / validation / test — strict separation'
+      },
+      {
+        label: 'Generalization',
+        value: 'Tested on real legacy footage not seen during training'
+      }
     ]
   }
 ];
@@ -85,7 +130,10 @@ export function ArchitectureSection() {
               </CardHeader>
               <CardContent className="space-y-4">
                 {topic.paragraphs.map((p, i) => (
-                  <p key={i} className="text-sm leading-relaxed text-muted-foreground">
+                  <p
+                    key={i}
+                    className="text-sm leading-relaxed text-muted-foreground"
+                  >
                     {p}
                   </p>
                 ))}
@@ -96,7 +144,9 @@ export function ArchitectureSection() {
                       <p className="text-xs font-semibold uppercase tracking-wider text-primary">
                         {h.label}
                       </p>
-                      <p className="mt-0.5 text-sm text-foreground">{h.value}</p>
+                      <p className="mt-0.5 text-sm text-foreground">
+                        {h.value}
+                      </p>
                     </div>
                   ))}
                 </div>

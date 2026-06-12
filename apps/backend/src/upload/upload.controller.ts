@@ -72,7 +72,9 @@ export class UploadController {
     description: 'Upload accepted, processing job created',
     type: UploadResponseDto
   })
-  upload(@UploadedFile() file: Express.Multer.File | undefined): UploadResponse {
+  upload(
+    @UploadedFile() file: Express.Multer.File | undefined
+  ): UploadResponse {
     if (!file) {
       throw new BadRequestException('No video file provided');
     }

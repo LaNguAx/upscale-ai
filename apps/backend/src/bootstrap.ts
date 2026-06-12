@@ -18,7 +18,9 @@ export function configureApp(
 
   app.setGlobalPrefix('api');
   app.enableCors({
-    origin: resolveCorsOrigin(configService.get('CORS_ORIGIN', { infer: true })),
+    origin: resolveCorsOrigin(
+      configService.get('CORS_ORIGIN', { infer: true })
+    ),
     credentials: true
   });
 
@@ -30,7 +32,9 @@ export function configureApp(
 function mountSwagger(app: INestApplication): void {
   const swaggerConfig = new DocumentBuilder()
     .setTitle('UPscale API')
-    .setDescription('Backend API for the UPscale video super-resolution project')
+    .setDescription(
+      'Backend API for the UPscale video super-resolution project'
+    )
     .setVersion('1.0.0')
     .build();
 

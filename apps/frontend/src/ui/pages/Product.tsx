@@ -7,14 +7,23 @@ import { JobResultPanel } from '@/ui/components/product/JobResultPanel';
 import { Alert, AlertDescription } from '@/ui/shadcn/ui/alert';
 import { Badge } from '@/ui/shadcn/ui/badge';
 import { Button } from '@/ui/shadcn/ui/button';
-import { useUploadVideoMutation, useCancelJobMutation } from '@/store/api/upscale.api';
+import {
+  useUploadVideoMutation,
+  useCancelJobMutation
+} from '@/store/api/upscale.api';
 import { useAppDispatch } from '@/store/hooks';
 import { addJob } from '@/store/slices/job.slice';
 import { getProductBySlug } from '@/consts/products';
 import { Crown, RotateCcw, Construction } from 'lucide-react';
 import { Card, CardContent } from '@/ui/shadcn/ui/card';
 
-type PageState = 'idle' | 'uploading' | 'processing' | 'completed' | 'failed' | 'cancelled';
+type PageState =
+  | 'idle'
+  | 'uploading'
+  | 'processing'
+  | 'completed'
+  | 'failed'
+  | 'cancelled';
 
 type UploadMutationError =
   | {
@@ -61,7 +70,9 @@ function getUploadErrorMessage(error: unknown): string {
 }
 
 function getCancelErrorMessage(error: unknown): string {
-  return getApiErrorMessage(error) ?? 'Failed to stop upscaling. Please try again.';
+  return (
+    getApiErrorMessage(error) ?? 'Failed to stop upscaling. Please try again.'
+  );
 }
 
 export function Product() {
@@ -93,7 +104,9 @@ export function Product() {
 
         const result = await uploadVideo({
           formData,
-          onProgress: (p) => { setUploadProgress(p); }
+          onProgress: (p) => {
+            setUploadProgress(p);
+          }
         }).unwrap();
 
         setJobId(result.jobId);
@@ -145,7 +158,11 @@ export function Product() {
       <PageContainer className="max-w-2xl">
         <div className="mb-12 text-center">
           <div className="mx-auto mb-4 flex size-14 items-center justify-center rounded-full bg-primary/10 text-primary">
-            {product.isPro ? <Crown className="size-7 text-amber-500" /> : <Icon className="size-7" />}
+            {product.isPro ? (
+              <Crown className="size-7 text-amber-500" />
+            ) : (
+              <Icon className="size-7" />
+            )}
           </div>
           <div className="flex items-center justify-center gap-2">
             <h1 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
@@ -168,10 +185,12 @@ export function Product() {
               <div className="mb-4 flex size-12 items-center justify-center rounded-full bg-muted text-muted-foreground">
                 <Construction className="size-6" />
               </div>
-              <h2 className="text-lg font-semibold text-foreground">Coming Soon</h2>
+              <h2 className="text-lg font-semibold text-foreground">
+                Coming Soon
+              </h2>
               <p className="mt-2 max-w-sm text-sm text-muted-foreground">
-                We&apos;re currently focused on building the Video Upscaler. This tool is next on our
-                roadmap and will be available soon.
+                We&apos;re currently focused on building the Video Upscaler.
+                This tool is next on our roadmap and will be available soon.
               </p>
               <Button asChild variant="outline" className="mt-6">
                 <a href="/products/upscaler">Try Video Upscaler</a>
@@ -199,14 +218,18 @@ export function Product() {
             {pageState === 'processing' && jobId && (
               <JobStatusPanel
                 jobId={jobId}
-                onCompleted={() => { setPageState('completed'); }}
+                onCompleted={() => {
+                  setPageState('completed');
+                }}
                 onCancelled={(reason) => {
                   setProcessingError(reason ?? 'Upscaling cancelled by user.');
                   setPageState('cancelled');
                   setIsStopping(false);
                 }}
                 onFailed={(reason) => {
-                  setProcessingError(reason ?? 'AI inference failed. Please try again.');
+                  setProcessingError(
+                    reason ?? 'AI inference failed. Please try again.'
+                  );
                   setPageState('failed');
                   setIsStopping(false);
                 }}
@@ -229,7 +252,11 @@ export function Product() {
                       'Video processing failed. This may be due to an unsupported format or a server issue.'}
                   </AlertDescription>
                 </Alert>
-                <Button variant="outline" onClick={handleReset} className="w-full">
+                <Button
+                  variant="outline"
+                  onClick={handleReset}
+                  className="w-full"
+                >
                   <RotateCcw className="size-4" data-icon="inline-start" />
                   Try Again
                 </Button>
@@ -243,7 +270,11 @@ export function Product() {
                     {processingError ?? 'Upscaling cancelled successfully.'}
                   </AlertDescription>
                 </Alert>
-                <Button variant="outline" onClick={handleReset} className="w-full">
+                <Button
+                  variant="outline"
+                  onClick={handleReset}
+                  className="w-full"
+                >
                   <RotateCcw className="size-4" data-icon="inline-start" />
                   Upload New Video
                 </Button>

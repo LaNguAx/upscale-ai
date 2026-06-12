@@ -33,7 +33,10 @@ export function HowItWorksSection() {
         />
         <div className="grid gap-8 sm:grid-cols-3">
           {STEPS.map((step, index) => (
-            <div key={step.title} className="relative flex flex-col items-center text-center">
+            <div
+              key={step.title}
+              className="relative flex flex-col items-center text-center"
+            >
               <div className="mb-5 flex size-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm">
                 <step.icon className="size-6" />
               </div>
@@ -47,7 +50,9 @@ export function HowItWorksSection() {
               <span className="mb-1 text-xs font-semibold uppercase tracking-wider text-primary">
                 Step {index + 1}
               </span>
-              <h3 className="text-lg font-semibold text-foreground">{step.title}</h3>
+              <h3 className="text-lg font-semibold text-foreground">
+                {step.title}
+              </h3>
               <p className="mt-2 text-sm leading-relaxed text-muted-foreground max-w-xs">
                 {step.description}
               </p>

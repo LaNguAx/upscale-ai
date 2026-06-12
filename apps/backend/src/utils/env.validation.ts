@@ -17,9 +17,7 @@ const envSchema = z.object({
   RESULT_DIR: z.string().default('../../storage/results'),
   MAX_FILE_SIZE_MB: z.coerce.number().int().positive().default(500),
   /** Comma-separated list of allowed upload extensions (with leading dots). */
-  ALLOWED_VIDEO_EXTENSIONS: z
-    .string()
-    .default('.mp4,.avi,.mkv,.mov,.wmv,.webm')
+  ALLOWED_VIDEO_EXTENSIONS: z.string().default('.mp4,.avi,.mkv,.mov,.wmv,.webm')
 });
 
 export type Env = z.infer<typeof envSchema>;

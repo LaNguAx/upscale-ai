@@ -9,6 +9,7 @@ This package is the source of truth for the repo's lint baseline. App-level conf
 - `@repo/eslint-config/base`
 - `@repo/eslint-config/node`
 - `@repo/eslint-config/react-internal`
+
 ## Guidance
 
 - Prefer tightening rules here instead of drifting per app

@@ -46,7 +46,9 @@ export function JobResultPanel({ jobId, onReset }: JobResultPanelProps) {
     return (
       <div className="space-y-4">
         <Alert variant="destructive">
-          <AlertDescription>Unable to load the enhanced video. Please try again.</AlertDescription>
+          <AlertDescription>
+            Unable to load the enhanced video. Please try again.
+          </AlertDescription>
         </Alert>
         <Button variant="outline" onClick={onReset} className="w-full">
           <RotateCcw className="size-4" data-icon="inline-start" />
@@ -63,17 +65,15 @@ export function JobResultPanel({ jobId, onReset }: JobResultPanelProps) {
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="overflow-hidden rounded-lg border border-border bg-muted/30">
-          <video
-            src={streamUrl}
-            controls
-            className="aspect-video w-full"
-          />
+          <video src={streamUrl} controls className="aspect-video w-full" />
         </div>
 
         <div className="flex gap-3">
           <Button
             className="flex-1"
-            onClick={() => { downloadFile(streamUrl, result.outputFilename); }}
+            onClick={() => {
+              downloadFile(streamUrl, result.outputFilename);
+            }}
           >
             <Download className="size-4" data-icon="inline-start" />
             Download Enhanced Video

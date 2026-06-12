@@ -2,22 +2,22 @@
 
 ## Environment variables
 
-| App      | Variable                   | Default                  | Source                                          |
-| -------- | -------------------------- | ------------------------ | ----------------------------------------------- |
-| backend  | `NODE_ENV`                 | `development`            | Zod-validated at startup (`env.validation.ts`)  |
-| backend  | `PORT`                     | `3000`                   | Zod-validated at startup                        |
-| backend  | `CORS_ORIGIN`              | `*`                      | Zod-validated. Comma-separated allowlist in prod |
-| backend  | `AI_SERVICE_URL`           | `http://localhost:8000`  | Zod-validated                                   |
-| backend  | `UPLOAD_DIR`               | `../../storage/uploads`  | Zod-validated, resolved from `apps/backend`     |
-| backend  | `RESULT_DIR`               | `../../storage/results`  | Zod-validated, resolved from `apps/backend`     |
-| backend  | `MAX_FILE_SIZE_MB`         | `500`                    | Zod-validated                                   |
-| backend  | `ALLOWED_VIDEO_EXTENSIONS` | `.mp4,.avi,...`          | Zod-validated                                   |
-| frontend | `VITE_PORT`                | `5173`                   | Read in `vite.config.ts`                        |
-| frontend | `VITE_API_BASE_URL`        | `http://localhost:3000`  | Backend origin (no `/api` suffix), `config/api.ts` |
-| ai       | `CHECKPOINT_PATH`          | `./checkpoints/vsr_model_best.pth` | Read in `server.py`                   |
-| ai       | `DEVICE`                   | auto (`cuda`/`cpu`)      | Read in `server.py`                             |
-| ai       | `MAX_INPUT_HEIGHT`         | `480`                    | Read in `server.py`                             |
-| ai       | `HOST` / `PORT`            | `0.0.0.0` / `8000`       | Read in `server.py`                             |
+| App      | Variable                   | Default                            | Source                                             |
+| -------- | -------------------------- | ---------------------------------- | -------------------------------------------------- |
+| backend  | `NODE_ENV`                 | `development`                      | Zod-validated at startup (`env.validation.ts`)     |
+| backend  | `PORT`                     | `3000`                             | Zod-validated at startup                           |
+| backend  | `CORS_ORIGIN`              | `*`                                | Zod-validated. Comma-separated allowlist in prod   |
+| backend  | `AI_SERVICE_URL`           | `http://localhost:8000`            | Zod-validated                                      |
+| backend  | `UPLOAD_DIR`               | `../../storage/uploads`            | Zod-validated, resolved from `apps/backend`        |
+| backend  | `RESULT_DIR`               | `../../storage/results`            | Zod-validated, resolved from `apps/backend`        |
+| backend  | `MAX_FILE_SIZE_MB`         | `500`                              | Zod-validated                                      |
+| backend  | `ALLOWED_VIDEO_EXTENSIONS` | `.mp4,.avi,...`                    | Zod-validated                                      |
+| frontend | `VITE_PORT`                | `5173`                             | Read in `vite.config.ts`                           |
+| frontend | `VITE_API_BASE_URL`        | `http://localhost:3000`            | Backend origin (no `/api` suffix), `config/api.ts` |
+| ai       | `CHECKPOINT_PATH`          | `./checkpoints/vsr_model_best.pth` | Read in `server.py`                                |
+| ai       | `DEVICE`                   | auto (`cuda`/`cpu`)                | Read in `server.py`                                |
+| ai       | `MAX_INPUT_HEIGHT`         | `480`                              | Read in `server.py`                                |
+| ai       | `HOST` / `PORT`            | `0.0.0.0` / `8000`                 | Read in `server.py`                                |
 
 ## Verification
 

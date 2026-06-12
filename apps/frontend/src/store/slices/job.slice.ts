@@ -23,7 +23,9 @@ const jobSlice = createSlice({
       state.activeJobs.push(action.payload);
     },
     removeJob(state, action: PayloadAction<string>) {
-      state.activeJobs = state.activeJobs.filter((j) => j.jobId !== action.payload);
+      state.activeJobs = state.activeJobs.filter(
+        (j) => j.jobId !== action.payload
+      );
     },
     clearJobs(state) {
       state.activeJobs = [];
