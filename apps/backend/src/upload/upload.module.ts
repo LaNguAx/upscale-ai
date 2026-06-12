@@ -3,25 +3,28 @@ import { MulterModule } from '@nestjs/platform-express';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { diskStorage } from 'multer';
 import * as crypto from 'node:crypto';
-import * as path from 'node:path';
 import * as fs from 'node:fs';
-import { UploadController } from './upload.controller';
-import { UploadService } from './upload.service';
-import { ProcessingService } from './processing.service';
+import * as path from 'node:path';
+import { UploadController } from '@/upload/upload.controller';
+import { UploadService } from '@/upload/upload.service';
+import { ProcessingService } from '@/upload/processing.service';
+import type { Env } from '@/utils/env.validation';
 
 @Module({
   imports: [
     MulterModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
-      useFactory: (configService: ConfigService) => {
+      useFactory: (configService: ConfigService<Env, true>) => {
         const uploadDir = path.resolve(
           process.cwd(),
-          configService.get<string>('UPLOAD_DIR', '../../storage/uploads'),
+          configService.get('UPLOAD_DIR', { infer: true })
         );
-        const maxSizeMb = configService.get<number>('MAX_FILE_SIZE_MB', 500);
+        const maxSizeMb = configService.get('MAX_FILE_SIZE_MB', {
+          infer: true
+        });
         const allowedExtensions = configService
-          .get<string>('ALLOWED_VIDEO_EXTENSIONS', '.mp4,.avi,.mkv,.mov,.wmv,.webm')
+          .get('ALLOWED_VIDEO_EXTENSIONS', { infer: true })
           .split(',')
           .map((ext) => ext.trim().toLowerCase());
 
@@ -33,15 +36,15 @@ import { ProcessingService } from './processing.service';
             filename: (_req, file, cb) => {
               const ext = path.extname(file.originalname).toLowerCase();
               cb(null, `${crypto.randomUUID()}${ext}`);
-            },
+            }
           }),
           limits: {
-            fileSize: maxSizeMb * 1024 * 1024,
+            fileSize: maxSizeMb * 1024 * 1024
           },
           fileFilter: (
             _req: Express.Request,
             file: Express.Multer.File,
-            cb: (error: Error | null, acceptFile: boolean) => void,
+            cb: (error: Error | null, acceptFile: boolean) => void
           ) => {
             const ext = path.extname(file.originalname).toLowerCase();
             if (allowedExtensions.includes(ext)) {
@@ -49,12 +52,12 @@ import { ProcessingService } from './processing.service';
             } else {
               cb(new Error(`File type ${ext} is not allowed`), false);
             }
-          },
+          }
         };
-      },
-    }),
+      }
+    })
   ],
   controllers: [UploadController],
-  providers: [UploadService, ProcessingService],
+  providers: [UploadService, ProcessingService]
 })
 export class UploadModule {}

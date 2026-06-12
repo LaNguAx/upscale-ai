@@ -2,7 +2,9 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { UploadService } from './upload.service';
+import { isTerminalJobState, type JobState } from '@repo/schemas/jobs';
+import { UploadService } from '@/upload/upload.service';
+import type { Env } from '@/utils/env.validation';
 
 interface AIHealthResponse {
   status: string;
@@ -31,15 +33,14 @@ export class ProcessingService {
 
   constructor(
     private readonly uploadService: UploadService,
-    private readonly configService: ConfigService,
+    private readonly configService: ConfigService<Env, true>,
   ) {
-    this.aiServiceUrl = this.configService.get<string>(
-      'AI_SERVICE_URL',
-      'http://localhost:8000',
-    );
+    this.aiServiceUrl = this.configService.get('AI_SERVICE_URL', {
+      infer: true,
+    });
     this.resultDir = path.resolve(
       process.cwd(),
-      this.configService.get<string>('RESULT_DIR', '../../storage/results'),
+      this.configService.get('RESULT_DIR', { infer: true }),
     );
   }
 
@@ -49,7 +50,7 @@ export class ProcessingService {
       this.logger.warn(`Job ${jobId}: record missing before processing start`);
       return;
     }
-    if (this.isTerminalState(existingJob.state)) {
+    if (isTerminalJobState(existingJob.state)) {
       this.logger.log(`Job ${jobId}: already terminal (${existingJob.state}), skipping`);
       return;
     }
@@ -101,7 +102,9 @@ export class ProcessingService {
         body: JSON.stringify({ jobId }),
       });
       if (!response.ok && response.status !== 404) {
-        this.logger.warn(`Cancel bridge to AI returned ${response.status} for job ${jobId}`);
+        this.logger.warn(
+          `Cancel bridge to AI returned ${String(response.status)} for job ${jobId}`,
+        );
       }
     } catch (error) {
       this.logger.warn(
@@ -132,7 +135,7 @@ export class ProcessingService {
 
     if (!response.ok) {
       throw new Error(
-        `AI service health check failed (${response.status} ${response.statusText})`,
+        `AI service health check failed (${String(response.status)} ${response.statusText})`,
       );
     }
 
@@ -155,13 +158,13 @@ export class ProcessingService {
       response = await fetch(`${this.aiServiceUrl}/process`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        // Sequence length and degradation simulation are owned by the AI
+        // engine's checkpoint configuration, so they are not sent here.
         body: JSON.stringify({
           jobId,
           inputPath,
           outputPath,
           scale: 4,
-          seqLen: 5,
-          simulateLq: true,
         }),
         signal: abortController.signal,
       });
@@ -173,7 +176,9 @@ export class ProcessingService {
     }
 
     if (!response.ok) {
-      throw new Error(`AI service returned ${response.status}: ${response.statusText}`);
+      throw new Error(
+        `AI service returned ${String(response.status)}: ${response.statusText}`,
+      );
     }
 
     if (!response.body) {
@@ -181,10 +186,11 @@ export class ProcessingService {
     }
 
     // Read NDJSON stream line-by-line
-    const reader = response.body.getReader();
+    const reader = response.body.getReader() as ReadableStreamDefaultReader<
+      Uint8Array<ArrayBuffer>
+    >;
     const decoder = new TextDecoder();
     let buffer = '';
-    let completed = false;
 
     const processUpdate = (update: AIProcessUpdate) => {
       if (update.status === 'failed') {
@@ -210,7 +216,7 @@ export class ProcessingService {
           'processing',
           update.progress,
         );
-        this.logger.log(`Job ${jobId}: ${update.progress}%`);
+        this.logger.log(`Job ${jobId}: ${String(update.progress)}%`);
       }
 
       if (update.status === 'completed') {
@@ -223,18 +229,13 @@ export class ProcessingService {
         this.uploadService.setResultPath(jobId, outputPath);
         this.uploadService.updateJob(jobId, 'completed', 100);
         this.logger.log(`Job ${jobId}: completed (AI)`);
-        completed = true;
         return 'completed' as const;
-      }
-
-      if (update.status !== 'processing') {
-        throw new Error(`AI service returned unknown status "${update.status}".`);
       }
 
       return 'continue' as const;
     };
 
-    while (true) {
+    for (;;) {
       const { done, value } = await reader.read();
       if (done) break;
 
@@ -272,33 +273,27 @@ export class ProcessingService {
       }
     }
 
-    if (!completed) {
-      throw new Error(
-        'AI processing stream ended without a completion event. Inference did not finish.',
-      );
-    }
+    // Every successful path returns from inside the loop (or the trailing
+    // buffer handling above), so reaching this point means the stream ended
+    // without a terminal event.
+    throw new Error(
+      'AI processing stream ended without a completion event. Inference did not finish.',
+    );
   }
 
   private isCancelled(jobId: string): boolean {
-    return this.uploadService.getJobRecord(jobId)?.state === 'cancelled';
-  }
-
-  private isTerminalState(state: string): boolean {
-    return state === 'completed' || state === 'failed' || state === 'cancelled';
+    const state: JobState | undefined =
+      this.uploadService.getJobRecord(jobId)?.state;
+    return state === 'cancelled';
   }
 
   private buildSignal(
     abortController: AbortController,
     timeoutMs: number,
   ): AbortSignal {
-    const timeoutSignal = AbortSignal.timeout(timeoutMs);
-    const anySignal = (
-      AbortSignal as typeof AbortSignal & {
-        any?: (signals: AbortSignal[]) => AbortSignal;
-      }
-    ).any;
-    return anySignal
-      ? anySignal([abortController.signal, timeoutSignal])
-      : abortController.signal;
+    return AbortSignal.any([
+      abortController.signal,
+      AbortSignal.timeout(timeoutMs),
+    ]);
   }
 }

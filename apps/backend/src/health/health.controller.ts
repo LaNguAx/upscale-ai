@@ -1,6 +1,9 @@
 import { Controller, Get } from '@nestjs/common';
-import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { HealthService } from 'src/health/health.service';
+import { ApiTags } from '@nestjs/swagger';
+import { ZodResponse } from 'nestjs-zod';
+import type { HealthResponse } from '@repo/schemas/health';
+import { HealthResponseDto } from '@/health/health.dto';
+import { HealthService } from '@/health/health.service';
 
 @ApiTags('health')
 @Controller('health')
@@ -8,18 +11,12 @@ export class HealthController {
   constructor(private readonly healthService: HealthService) {}
 
   @Get()
-  @ApiOperation({ summary: 'Health check' })
-  @ApiOkResponse({
-    description: 'Backend service is healthy',
-    schema: {
-      example: {
-        ok: true,
-        service: 'backend',
-        timestamp: '2026-03-22T21:30:00.000Z',
-      },
-    },
+  @ZodResponse({
+    status: 200,
+    description: 'Service health status',
+    type: HealthResponseDto
   })
-  getHealth() {
+  getHealth(): HealthResponse {
     return this.healthService.getHealth();
   }
 }

@@ -1,19 +1,22 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Subject, Observable, filter, map, takeWhile, startWith } from 'rxjs';
+import { Subject, filter, map, startWith, takeWhile } from 'rxjs';
+import type { Observable } from 'rxjs';
+import * as crypto from 'node:crypto';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import * as crypto from 'node:crypto';
-import type { JobStatusDto } from './dto/job-status.dto';
-import type { JobResultDto } from './dto/job-result.dto';
-import type { UploadResponseDto } from './dto/upload-response.dto';
-
-export type JobState =
-  | 'queued'
-  | 'processing'
-  | 'completed'
-  | 'failed'
-  | 'cancelled';
+import {
+  isTerminalJobState,
+  type JobState,
+  type JobStatus,
+  type JobUpdate
+} from '@repo/schemas/jobs';
+import type { JobResult, UploadResponse } from '@repo/schemas/upload';
+import type { Env } from '@/utils/env.validation';
 
 interface JobRecord {
   jobId: string;
@@ -28,18 +31,6 @@ interface JobRecord {
   error?: string;
 }
 
-interface JobUpdate {
-  jobId: string;
-  state: JobState;
-  progress: number;
-  updatedAt: string;
-  error?: string;
-}
-
-function isTerminalState(state: JobState): boolean {
-  return state === 'completed' || state === 'failed' || state === 'cancelled';
-}
-
 @Injectable()
 export class UploadService {
   private readonly jobs = new Map<string, JobRecord>();
@@ -47,21 +38,21 @@ export class UploadService {
   private readonly uploadDir: string;
   private readonly resultDir: string;
 
-  constructor(private readonly configService: ConfigService) {
+  constructor(private readonly configService: ConfigService<Env, true>) {
     this.uploadDir = path.resolve(
       process.cwd(),
-      this.configService.get<string>('UPLOAD_DIR', '../../storage/uploads'),
+      this.configService.get('UPLOAD_DIR', { infer: true })
     );
     this.resultDir = path.resolve(
       process.cwd(),
-      this.configService.get<string>('RESULT_DIR', '../../storage/results'),
+      this.configService.get('RESULT_DIR', { infer: true })
     );
 
     fs.mkdirSync(this.uploadDir, { recursive: true });
     fs.mkdirSync(this.resultDir, { recursive: true });
   }
 
-  createJob(file: Express.Multer.File): UploadResponseDto {
+  createJob(file: Express.Multer.File): UploadResponse {
     const jobId = crypto.randomUUID();
     const now = new Date().toISOString();
 
@@ -74,7 +65,7 @@ export class UploadService {
       uploadPath: file.path,
       resultPath: file.path,
       createdAt: now,
-      updatedAt: now,
+      updatedAt: now
     };
 
     this.jobs.set(jobId, record);
@@ -86,11 +77,11 @@ export class UploadService {
     jobId: string,
     state: JobState,
     progress: number,
-    error?: string,
+    error?: string
   ): void {
     const job = this.jobs.get(jobId);
     if (!job) return;
-    if (isTerminalState(job.state)) return;
+    if (isTerminalJobState(job.state)) return;
 
     const now = new Date().toISOString();
     job.state = state;
@@ -103,7 +94,7 @@ export class UploadService {
       state,
       progress,
       updatedAt: now,
-      error,
+      error
     });
   }
 
@@ -118,24 +109,18 @@ export class UploadService {
       state: job.state,
       progress: job.progress,
       updatedAt: job.updatedAt,
-      error: job.error,
+      error: job.error
     };
 
     return this.jobUpdates$.pipe(
       filter((u) => u.jobId === jobId),
       startWith(currentState),
-      takeWhile(
-        (u) => !isTerminalState(u.state),
-        true,
-      ),
-      map(
-        (u) =>
-          ({ data: JSON.stringify(u) }) as unknown as MessageEvent,
-      ),
+      takeWhile((u) => !isTerminalJobState(u.state), true),
+      map((u) => ({ data: JSON.stringify(u) }) as unknown as MessageEvent)
     );
   }
 
-  getJobStatus(jobId: string): JobStatusDto {
+  getJobStatus(jobId: string): JobStatus {
     const job = this.jobs.get(jobId);
     if (!job) {
       throw new NotFoundException(`Job ${jobId} not found`);
@@ -147,18 +132,18 @@ export class UploadService {
       progress: job.progress,
       createdAt: job.createdAt,
       updatedAt: job.updatedAt,
-      error: job.error,
+      error: job.error
     };
   }
 
-  getJobResult(jobId: string): JobResultDto {
+  getJobResult(jobId: string): JobResult {
     const job = this.jobs.get(jobId);
     if (!job) {
       throw new NotFoundException(`Job ${jobId} not found`);
     }
     if (job.state !== 'completed') {
       throw new BadRequestException(
-        `Job ${jobId} is not completed yet (state: ${job.state})`,
+        `Job ${jobId} is not completed yet (state: ${job.state})`
       );
     }
 
@@ -169,7 +154,7 @@ export class UploadService {
       jobId: job.jobId,
       downloadUrl: `/api/upload/stream/${job.jobId}`,
       originalFilename: job.originalFilename,
-      outputFilename: `${name}_enhanced_by_upscale${ext}`,
+      outputFilename: `${name}_enhanced_by_upscale${ext}`
     };
   }
 
@@ -181,11 +166,11 @@ export class UploadService {
 
     return {
       filePath: job.resultPath,
-      filename: job.originalFilename,
+      filename: job.originalFilename
     };
   }
 
-  getJobRecord(jobId: string) {
+  getJobRecord(jobId: string): JobRecord | undefined {
     return this.jobs.get(jobId);
   }
 
@@ -201,7 +186,7 @@ export class UploadService {
     if (!job) {
       throw new NotFoundException(`Job ${jobId} not found`);
     }
-    if (isTerminalState(job.state)) {
+    if (isTerminalJobState(job.state)) {
       return;
     }
 

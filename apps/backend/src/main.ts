@@ -1,50 +1,28 @@
-import { Logger, ValidationPipe } from '@nestjs/common';
+import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
-import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
-import { AppModule } from './app.module';
+import { AppModule } from '@/app/app.module';
+import { configureApp } from '@/bootstrap';
+import type { Env } from '@/utils/env.validation';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
-  const configService = app.get(ConfigService);
-  const logger = new Logger('Bootstrap');
+  const configService = app.get(ConfigService<Env, true>);
 
-  app.setGlobalPrefix('api');
+  configureApp(app, configService);
 
-  app.enableCors({
-    origin: true,
-    credentials: true,
-  });
-
-  app.useGlobalPipes(
-    new ValidationPipe({
-      whitelist: true,
-      forbidNonWhitelisted: true,
-      transform: true,
-    }),
-  );
-
-  const swaggerConfig = new DocumentBuilder()
-    .setTitle('UPscale Backend API')
-    .setDescription('Backend API for the UPscale project')
-    .setVersion('1.0.0')
-    .addTag('health')
-    .addTag('upload')
-    .build();
-
-  const swaggerDocument = SwaggerModule.createDocument(app, swaggerConfig);
-  SwaggerModule.setup('docs', app, swaggerDocument);
-
-  const port = configService.get<number>('PORT', 3000);
-
+  const port = configService.get('PORT', { infer: true });
+  const nodeEnv = configService.get('NODE_ENV', { infer: true });
   await app.listen(port);
 
-  logger.log(`Backend running on http://localhost:${port}/api`);
-  logger.log(`Swagger docs available at http://localhost:${port}/docs`);
-
-  logger.log(
-    `Environment: ${configService.get<string>('NODE_ENV', 'development')}`,
-  );
+  const baseUrl = `http://localhost:${String(port)}`;
+  const logger = new Logger('Bootstrap');
+  logger.log('UPscale backend is up');
+  logger.log(`   env       ${nodeEnv}`);
+  logger.log(`   api       ${baseUrl}/api`);
+  if (nodeEnv !== 'production') {
+    logger.log(`   swagger   ${baseUrl}/docs`);
+  }
 }
 
 void bootstrap();

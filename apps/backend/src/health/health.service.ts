@@ -1,18 +1,14 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
+import type { HealthResponse } from '@repo/schemas/health';
 
 @Injectable()
 export class HealthService {
-  getHealth() {
-    const health = Math.random() > 0.5;
-
-    if (!health) {
-      throw new BadRequestException('Service is not healthy');
-    }
-
+  getHealth(): HealthResponse {
     return {
-      ok: health,
+      status: 'ok',
       service: 'backend',
-      timestamp: new Date().toISOString(),
+      uptime: process.uptime(),
+      timestamp: new Date().toISOString()
     };
   }
 }
