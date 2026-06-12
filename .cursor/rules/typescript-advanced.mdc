@@ -1,0 +1,19 @@
+---
+description: Advanced TypeScript — type safety, generics, discriminated unions, no any
+alwaysApply: true
+---
+
+# Advanced TypeScript
+
+- Never use `any`. Use `unknown` and narrow with type guards, or define a proper type. If you think you need `any`, you need a generic or a union.
+- Prefer `interface` for object shapes that may be extended or implemented. Use `type` for unions, intersections, mapped types, and computed types.
+- Use `satisfies` to validate that a value matches a type while preserving its narrower literal type: `const config = { port: 3000 } satisfies Config`.
+- Model states with discriminated unions, not optional fields: `{ status: 'loading' } | { status: 'success'; data: T } | { status: 'error'; error: Error }` is safer than `{ loading?: boolean; data?: T; error?: Error }`.
+- Use `as const` for literal tuples and configuration objects that should not widen.
+- Use generics to eliminate type duplication — but stop at one level of nesting. If a generic signature reads like a puzzle, simplify it or split it.
+- Use `Record<K, V>` over `{ [key: string]: V }` for index signatures. It is more readable and explicit about key types.
+- Prefer `readonly` for function parameters and properties that should not be mutated after creation.
+- Use `import type` for type-only imports to ensure they are erased at compile time and do not create runtime dependencies.
+- Let TypeScript infer return types for simple, internal functions. Annotate explicitly when the function is part of a public API, is complex, or when the inferred type is wider than intended.
+- Use template literal types and branded types when domain precision matters (e.g., `UserId` vs raw `string`).
+- Avoid type assertions (`as`). If you need to assert, you are likely missing a type guard or the types are wrong.

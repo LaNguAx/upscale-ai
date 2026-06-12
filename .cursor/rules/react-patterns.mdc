@@ -1,0 +1,18 @@
+---
+description: React 19 patterns — hooks, composition, React Compiler, state management
+alwaysApply: true
+---
+
+# React patterns (React 19)
+
+- **React Compiler first**: React 19 with React Compiler handles memoization automatically. Do not manually add `useMemo`, `useCallback`, or `React.memo` unless you have measured a performance issue the compiler cannot optimize.
+- **Composition over configuration**: Pass `children` and render props instead of building mega-components with many props. A component with more than 7 props is a candidate for decomposition.
+- **State locality**: Lift state only as high as it needs to go. Local `useState` is fine when only one component reads and writes it. Do not hoist state "just in case."
+- **Custom hooks for behavior**: A custom hook should encapsulate a meaningful concern (data fetching, form handling, subscriptions), not just reduce line count. If the hook is only called in one place and saves fewer than 10 lines, inline it.
+- **No `useEffect` for derived state**: If a value can be computed from existing state or props, compute it during render. `useEffect` to sync derived state causes extra renders and subtle bugs.
+- **Suspense for async**: Use `Suspense` boundaries with React 19's `use()` hook for data fetching. Do not hand-roll loading states with `useEffect` + `useState` patterns.
+- **Component size ~150 lines**: If a component file grows past this, extract sub-components or custom hooks. A component should be readable in one screen.
+- **Props interface co-location**: Define the props interface in the same file as the component. Do not create separate `types.ts` files per component.
+- **Controlled forms**: Prefer controlled components for form inputs. Use uncontrolled components only when performance profiling shows controlled inputs are a bottleneck.
+- **Keys must be stable and unique**: Never use array index as `key` for lists that can reorder, filter, or grow. Use a domain identifier.
+- **Event handlers**: Name handlers by what they do, not what triggers them: `saveUser` not `handleClick`, `toggleSidebar` not `onButtonPress`.

@@ -1,0 +1,25 @@
+---
+description: REST API design — resource naming, status codes, response envelopes, pagination
+alwaysApply: true
+---
+
+# API design
+
+- **Resource naming**: Use plural nouns for endpoints: `/users`, `/orders`, `/products`. Not verbs: `/getUsers`, `/createOrder`.
+- **HTTP verbs mean what they say**: `GET` reads (safe, idempotent). `POST` creates. `PUT` replaces entirely. `PATCH` updates partially. `DELETE` removes. Do not use `POST` for everything.
+- **Correct status codes**:
+  - `200` success (GET, PATCH, DELETE)
+  - `201` created (POST)
+  - `204` no content (DELETE with no body)
+  - `400` bad request (validation failure)
+  - `401` unauthenticated (no or invalid credentials)
+  - `403` forbidden (valid credentials, insufficient permissions)
+  - `404` not found
+  - `409` conflict (duplicate resource)
+  - `500` internal server error (unhandled)
+- **Consistent response envelope**: Success: `{ data, meta }`. Error: `{ error: { code, message, details } }`. Never return raw arrays at the top level — always wrap in an object for extensibility.
+- **Paginate from day one**: List endpoints return paginated results with `{ data, meta: { page, pageSize, total } }`. Do not return unbounded arrays that grow with the dataset.
+- **Validate at the boundary**: All request bodies, query params, and path params are validated at the controller level using Zod schemas + NestJS pipes. Invalid input never reaches business logic.
+- **Versioning**: Prefer additive, non-breaking changes (new optional fields, new endpoints). When a breaking change is unavoidable, version the API (`/api/v1/`, `/api/v2/`).
+- **Thin controllers**: Parse input, call service, return response. A controller method should be 5-15 lines. Business logic, orchestration, and data access belong in services and repositories.
+- **Consistent naming conventions**: Use `camelCase` for JSON field names. Use `kebab-case` for URL paths. Use `SCREAMING_SNAKE_CASE` for environment variables.

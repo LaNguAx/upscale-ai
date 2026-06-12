@@ -1,0 +1,13 @@
+---
+description: Shared TypeScript and quality conventions
+globs: **/*.{ts,tsx,js,mjs,cjs}
+alwaysApply: false
+---
+
+# Shared code quality
+
+- Honor the shared TypeScript and ESLint baselines in `packages/typescript-config` and `packages/eslint-config`.
+- Use app-local aliases such as `@/` where they are configured instead of reaching for long relative imports.
+- Keep imports at the top of the file and use `import type` where only types are needed.
+- Fix surfaced lint and type errors instead of weakening the shared baseline locally.
+- If a new pattern should apply broadly, move it into shared config or shared docs instead of copying it across apps.

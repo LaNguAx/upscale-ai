@@ -1,0 +1,16 @@
+---
+description: Tailwind 4 patterns — utility-first, CSS config, design tokens, responsive
+alwaysApply: true
+---
+
+# Tailwind patterns (Tailwind CSS 4)
+
+- **Utility-first**: Compose styles using utility classes in markup. Extract reusable patterns into React components, not into custom CSS files.
+- **CSS-first configuration**: Tailwind 4 uses `@theme` blocks in CSS for configuration. Do not look for or create a `tailwind.config.js` / `tailwind.config.ts` file — it does not apply in v4.
+- **Design tokens over raw values**: Use theme tokens (`text-primary`, `bg-surface`, `rounded-lg`) over arbitrary values (`text-[#1a1a1a]`, `bg-[#f5f5f5]`). If a value is used more than once, it belongs in the theme.
+- **Mobile-first responsive**: Use responsive prefixes (`sm:`, `md:`, `lg:`, `xl:`) that apply from the breakpoint upward. Write base styles for mobile, then layer on larger screen adjustments.
+- **Modern layout utilities**: Use `flex` and `grid` utilities for layout. Avoid `float`, manual `position: absolute` hacks, or negative margins for alignment.
+- **Logical class ordering**: Group utilities by concern: layout (`flex`, `grid`) -> spacing (`p-`, `m-`, `gap-`) -> sizing (`w-`, `h-`) -> typography (`text-`, `font-`) -> color (`bg-`, `text-`, `border-`) -> state (`hover:`, `focus:`, `disabled:`).
+- **No `@apply` for component extraction**: Do not use `@apply` to create utility bundles in CSS. Extract repeated patterns into React components instead. `@apply` defeats the utility-first model and creates hidden coupling.
+- **Dark mode with variants**: Use the `dark:` variant for dark mode styles. Do not build parallel class systems or toggle classes with JavaScript.
+- **Accessible by default**: Always include focus-visible styles (`focus-visible:ring-2`), sufficient color contrast, and proper interactive state feedback (`hover:`, `active:`, `disabled:`).

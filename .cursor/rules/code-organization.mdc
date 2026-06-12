@@ -1,0 +1,15 @@
+---
+description: Code organization — file structure, imports, exports, co-location
+alwaysApply: true
+---
+
+# Code organization
+
+- **Import order**: external libraries first, then monorepo packages (`@repo/*`), then local aliases (`@/`), then relative paths. Separate each group with a blank line.
+- **One exported concept per file**: A file should have a clear, single purpose. Avoid multi-purpose utility dumps that grow without bound.
+- **Feature folders over layers-by-type**: Co-locate files that change together. A feature directory with its component, hook, types, and logic is better than separate `components/`, `hooks/`, `utils/` trees.
+- **No barrel files**: Do not use `index.ts` re-export files. Barrel files force bundlers to load the entire module graph even when only one export is needed, slowing builds and increasing bundle size. Use `package.json` `exports` map to expose submodule paths directly (e.g., `"./health": "./dist/health/health.schemas.js"`). Consumers import from explicit subpaths, not from a root barrel.
+- **File size limit ~300 lines**: If a file grows past this, it likely has multiple responsibilities. Extract the secondary concern into its own file.
+- **Group related exports together**: Keep related functions, types, and constants in the same directory. Do not scatter pieces of one feature across the tree.
+- **Consistent file naming**: Use `kebab-case` for file names. Match the file name to its primary export where practical (`user-service.ts` exports `UserService`).
+- **Avoid deep nesting**: If a file path has more than 4 directory levels, consider flattening. Deep trees make navigation harder and usually reflect over-categorization.

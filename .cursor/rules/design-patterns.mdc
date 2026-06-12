@@ -1,0 +1,16 @@
+---
+description: Design patterns — when and how to apply common patterns
+alwaysApply: true
+---
+
+# Design patterns
+
+- Use patterns to solve problems, not to demonstrate knowledge. If the problem does not exist, the pattern does not belong.
+- **Factory**: Use when object creation involves decisions — which subclass, what configuration, what defaults. NestJS custom providers are factories; use them instead of manual construction.
+- **Strategy**: Use when behavior varies by context at runtime — different auth strategies, different payment processors, different export formats. Define a shared interface and swap implementations.
+- **Observer / Event-Driven**: Use for decoupled communication where the producer should not know about the consumers. NestJS EventEmitter and React event callbacks follow this pattern.
+- **Repository**: Use to abstract data access behind a query interface. Business logic stays storage-agnostic; the repository hides whether data comes from a database, API, or cache.
+- **Builder**: Use when constructing complex objects step-by-step — query builders, configuration objects, request pipelines. Prefer it over constructors with many optional parameters.
+- **Decorator**: Use for layering cross-cutting behavior (logging, caching, retry) without modifying the wrapped class. NestJS decorators and interceptors are this pattern — use them.
+- Avoid Singleton outside DI containers. NestJS already provides singleton-scoped providers by default — do not hand-roll global instances.
+- Do not reach for an abstract base class when composition would do. Favor interfaces + injection over inheritance hierarchies.

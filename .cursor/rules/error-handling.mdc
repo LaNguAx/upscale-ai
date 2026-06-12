@@ -1,0 +1,15 @@
+---
+description: Error handling — fail fast, typed errors, no silent failures
+alwaysApply: true
+---
+
+# Error handling
+
+- Never swallow errors silently. Every `catch` block must log, rethrow, or handle the error meaningfully. An empty `catch` is a bug waiting to hide.
+- Fail fast: validate inputs at system boundaries (API controllers, form handlers, CLI entry points), not deep inside business logic. The deeper a bad value travels, the harder the bug is to trace.
+- Use typed or custom error classes over bare `throw new Error("...")`. Consumers should catch by type, not by parsing message strings.
+- Never use exceptions for control flow. Exceptions are for unexpected failures, not for expected branches like "user not found."
+- Always clean up resources in `finally` blocks or use disposable patterns. Database connections, file handles, and timers must not leak on error paths.
+- Error messages must be actionable: what happened, what was expected, and what to do about it. `"Failed to parse config"` is useless; `"Failed to parse config: missing required field 'port' in .env"` is helpful.
+- Let errors propagate when you have nothing useful to add. Catching only to rethrow with less context makes debugging harder.
+- In async code, always handle promise rejections. Unhandled rejections crash Node processes and silently disappear in browsers.

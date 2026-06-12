@@ -1,0 +1,17 @@
+---
+description: Performance — algorithmic complexity, data structures, bundle size, lazy loading
+alwaysApply: true
+---
+
+# Performance
+
+- Choose the right data structure for the operation: `Map` and `Set` for O(1) lookups, arrays for ordered iteration, `WeakMap` / `WeakRef` when entries should be garbage-collected.
+- Know your algorithmic complexity. O(n^2) nested loops on data that may grow are a red flag, not a starting point. Prefer O(n) or O(n log n) alternatives.
+- Memoize expensive pure computations. Cache deterministic results that are called repeatedly with the same inputs.
+- Lazy-load what is not needed immediately: code-split routes, defer heavy imports with dynamic `import()`, load below-the-fold content on demand.
+- Avoid premature optimization, but do not write obviously slow code. Choosing `Array.includes` over a `Set.has` in a hot loop is not optimization — it is awareness.
+- Watch bundle size: tree-shake unused exports, avoid importing entire libraries for a single function (`import { debounce } from 'lodash-es'`, not `import _ from 'lodash'`).
+- Database queries: select only needed columns, paginate list results, add indexes on columns used in `WHERE` and `ORDER BY` clauses, avoid N+1 query patterns.
+- Avoid unnecessary re-renders on the frontend: keep state local when possible, split context providers by concern, and trust React Compiler before reaching for manual memoization.
+- Prefer streaming and pagination over loading full datasets into memory when handling large collections.
+- Measure before you optimize. Use profiling tools and benchmarks to confirm a bottleneck exists before adding complexity to fix it.

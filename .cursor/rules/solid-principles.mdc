@@ -1,0 +1,13 @@
+---
+description: SOLID principles — SRP, OCP, LSP, ISP, DIP applied practically
+alwaysApply: true
+---
+
+# SOLID principles
+
+- **Single Responsibility (SRP)**: A class or module has one reason to change. If you cannot describe its purpose in one sentence without "and," split it.
+- **Open/Closed (OCP)**: Extend behavior through composition, new implementations, or configuration — not by editing stable, tested code. Add a new strategy; don't bolt an `if` onto an existing one.
+- **Liskov Substitution (LSP)**: Subtypes must honor the contract of their parent. No surprise exceptions, no narrowed input ranges, no weakened guarantees. If a function accepts a base type, every subtype must work without the caller knowing the difference.
+- **Interface Segregation (ISP)**: Don't force consumers to depend on methods they never call. Prefer small, focused interfaces over large, general-purpose ones. Split when consumers cluster around different subsets.
+- **Dependency Inversion (DIP)**: High-level modules depend on abstractions, not on concrete implementations. Inject dependencies through constructors or DI containers; never `new` a collaborator inline where it hides a coupling.
+- Apply these principles to reduce the cost of change, not to impress code reviewers. If a principle makes the code harder to understand for no practical benefit, you are over-engineering.
