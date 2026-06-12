@@ -1,5 +1,9 @@
 @AGENTS.md
 
+## Keeping docs truthful
+
+If you change behavior, structure, endpoints, env vars, schemas, commands, or workflow, update the affected `README.md`, `AGENTS.md`, `CLAUDE.md`, and `.cursor/rules` files in the same change. Per-app `CLAUDE.md` files are `@AGENTS.md` imports — edit the `AGENTS.md`, not the import.
+
 ## Environment variables
 
 | App      | Variable                   | Default                            | Source                                             |
