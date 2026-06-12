@@ -1,0 +1,22 @@
+# Dependencies
+node_modules
+
+# Framework and build outputs
+.turbo
+build
+coverage
+dist
+out
+*.tsbuildinfo
+
+# Generated lockfiles
+pnpm-lock.yaml
+
+# Runtime and binary content
+storage
+fixtures
+docs
+*.ipynb
+*.pth
+__pycache__
+.playwright-mcp
