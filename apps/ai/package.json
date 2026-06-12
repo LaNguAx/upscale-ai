@@ -5,6 +5,7 @@
   "description": "UPscale Python AI inference service (FastAPI + PyTorch BasicVSR)",
   "scripts": {
     "dev": "python -m uvicorn server:app --host 0.0.0.0 --port 8000 --reload",
+    "preview": "python -m uvicorn server:app --host 0.0.0.0 --port 8000",
     "start:prod": "python -m uvicorn server:app --host 0.0.0.0 --port 8000",
     "setup": "python -m pip install -r requirements.txt"
   }
