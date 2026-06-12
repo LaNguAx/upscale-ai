@@ -80,7 +80,7 @@ export function VideoUploadForm({ onUpload, isUploading, uploadProgress = 0 }: V
           e.preventDefault();
           setDragOver(true);
         }}
-        onDragLeave={() => setDragOver(false)}
+        onDragLeave={() => { setDragOver(false); }}
         onDrop={handleDrop}
         onClick={() => !file && inputRef.current?.click()}
         className={cn(

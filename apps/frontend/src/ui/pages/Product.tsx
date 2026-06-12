@@ -19,46 +19,49 @@ type PageState = 'idle' | 'uploading' | 'processing' | 'completed' | 'failed' | 
 type UploadMutationError =
   | {
       error?: string;
-      data?: { message?: string | string[] };
+      // The backend returns RFC 7807 ProblemDetails (`detail`/`title`); the
+      // legacy `message` shape is kept as a fallback.
+      data?: { detail?: string; title?: string; message?: string | string[] };
       status?: string | number;
     }
   | undefined;
 
-function getUploadErrorMessage(error: unknown): string {
+function getApiErrorMessage(error: unknown): string | null {
   const typedError = error as UploadMutationError;
   if (!typedError) {
-    return 'Failed to upload video. Please check your connection and try again.';
+    return null;
   }
 
   if (typeof typedError.error === 'string' && typedError.error.length > 0) {
     return typedError.error;
   }
 
-  const apiMessage = typedError.data?.message;
-  if (Array.isArray(apiMessage)) {
-    return apiMessage.join(', ');
+  const { detail, title, message } = typedError.data ?? {};
+  if (typeof detail === 'string' && detail.length > 0) {
+    return detail;
+  }
+  if (Array.isArray(message)) {
+    return message.join(', ');
+  }
+  if (typeof message === 'string' && message.length > 0) {
+    return message;
+  }
+  if (typeof title === 'string' && title.length > 0) {
+    return title;
   }
 
-  if (typeof apiMessage === 'string' && apiMessage.length > 0) {
-    return apiMessage;
-  }
+  return null;
+}
 
-  return 'Failed to upload video. Please check your connection and try again.';
+function getUploadErrorMessage(error: unknown): string {
+  return (
+    getApiErrorMessage(error) ??
+    'Failed to upload video. Please check your connection and try again.'
+  );
 }
 
 function getCancelErrorMessage(error: unknown): string {
-  const typedError = error as UploadMutationError;
-  const apiMessage = typedError?.data?.message;
-  if (Array.isArray(apiMessage)) {
-    return apiMessage.join(', ');
-  }
-  if (typeof apiMessage === 'string' && apiMessage.length > 0) {
-    return apiMessage;
-  }
-  if (typeof typedError?.error === 'string' && typedError.error.length > 0) {
-    return typedError.error;
-  }
-  return 'Failed to stop upscaling. Please try again.';
+  return getApiErrorMessage(error) ?? 'Failed to stop upscaling. Please try again.';
 }
 
 export function Product() {
@@ -90,7 +93,7 @@ export function Product() {
 
         const result = await uploadVideo({
           formData,
-          onProgress: (p) => setUploadProgress(p)
+          onProgress: (p) => { setUploadProgress(p); }
         }).unwrap();
 
         setJobId(result.jobId);
@@ -167,7 +170,7 @@ export function Product() {
               </div>
               <h2 className="text-lg font-semibold text-foreground">Coming Soon</h2>
               <p className="mt-2 max-w-sm text-sm text-muted-foreground">
-                We're currently focused on building the Video Upscaler. This tool is next on our
+                We&apos;re currently focused on building the Video Upscaler. This tool is next on our
                 roadmap and will be available soon.
               </p>
               <Button asChild variant="outline" className="mt-6">
@@ -185,7 +188,9 @@ export function Product() {
 
             {(pageState === 'idle' || pageState === 'uploading') && (
               <VideoUploadForm
-                onUpload={handleUpload}
+                onUpload={(file) => {
+                  void handleUpload(file);
+                }}
                 isUploading={pageState === 'uploading'}
                 uploadProgress={uploadProgress}
               />
@@ -194,7 +199,7 @@ export function Product() {
             {pageState === 'processing' && jobId && (
               <JobStatusPanel
                 jobId={jobId}
-                onCompleted={() => setPageState('completed')}
+                onCompleted={() => { setPageState('completed'); }}
                 onCancelled={(reason) => {
                   setProcessingError(reason ?? 'Upscaling cancelled by user.');
                   setPageState('cancelled');
@@ -205,7 +210,9 @@ export function Product() {
                   setPageState('failed');
                   setIsStopping(false);
                 }}
-                onStop={handleStopUpscaling}
+                onStop={() => {
+                  void handleStopUpscaling();
+                }}
                 isStopping={isStopping}
               />
             )}

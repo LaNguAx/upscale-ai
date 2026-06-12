@@ -1,10 +1,18 @@
-export const NAV_LINKS_BEFORE = [
-  { label: 'Home', to: '/' }
-] as const;
+export interface NavLinkItem {
+  label: string;
+  to: string;
+}
 
-export const NAV_LINKS_AFTER = [
+export const NAV_LINKS_BEFORE: readonly NavLinkItem[] = [
+  { label: 'Home', to: '/' }
+];
+
+export const NAV_LINKS_AFTER: readonly NavLinkItem[] = [
   { label: 'Technology', to: '/technology' },
   { label: 'About', to: '/about' }
-] as const;
+];
 
-export const NAV_LINKS = [...NAV_LINKS_BEFORE, ...NAV_LINKS_AFTER] as const;
+export const NAV_LINKS: readonly NavLinkItem[] = [
+  ...NAV_LINKS_BEFORE,
+  ...NAV_LINKS_AFTER
+];

@@ -1,12 +1,11 @@
+import { UPLOAD_STREAM_ENDPOINT } from '@repo/consts/upload';
 import { useGetJobResultQuery } from '@/store/api/upscale.api';
 import { Button } from '@/ui/shadcn/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/ui/shadcn/ui/card';
 import { Skeleton } from '@/ui/shadcn/ui/skeleton';
 import { Alert, AlertDescription } from '@/ui/shadcn/ui/alert';
-import { Separator } from '@/ui/shadcn/ui/separator';
 import { Download, RotateCcw } from 'lucide-react';
-import { formatDuration } from '@/utils/format';
-import { API_BASE_URL } from '@/config/api';
+import { buildApiUrl } from '@/config/api';
 
 function downloadFile(url: string, filename: string) {
   fetch(url)
@@ -17,6 +16,9 @@ function downloadFile(url: string, filename: string) {
       a.download = filename;
       a.click();
       URL.revokeObjectURL(a.href);
+    })
+    .catch(() => {
+      // Best-effort download; the inline player still works if this fails.
     });
 }
 
@@ -27,7 +29,7 @@ interface JobResultPanelProps {
 
 export function JobResultPanel({ jobId, onReset }: JobResultPanelProps) {
   const { data: result, isLoading, error } = useGetJobResultQuery(jobId);
-  const streamUrl = `${API_BASE_URL}/upload/stream/${jobId}`;
+  const streamUrl = buildApiUrl(UPLOAD_STREAM_ENDPOINT, { jobId });
 
   if (isLoading) {
     return (
@@ -68,34 +70,10 @@ export function JobResultPanel({ jobId, onReset }: JobResultPanelProps) {
           />
         </div>
 
-        {result.metadata && (
-          <>
-            <Separator />
-            <div className="grid grid-cols-2 gap-3 text-sm">
-              <div>
-                <p className="text-muted-foreground">Original</p>
-                <p className="font-medium">{result.metadata.originalResolution}</p>
-              </div>
-              <div>
-                <p className="text-muted-foreground">Enhanced</p>
-                <p className="font-medium">{result.metadata.outputResolution}</p>
-              </div>
-              <div>
-                <p className="text-muted-foreground">Duration</p>
-                <p className="font-medium">{formatDuration(result.metadata.duration)}</p>
-              </div>
-              <div>
-                <p className="text-muted-foreground">Processing Time</p>
-                <p className="font-medium">{formatDuration(result.metadata.processingTime)}</p>
-              </div>
-            </div>
-          </>
-        )}
-
         <div className="flex gap-3">
           <Button
             className="flex-1"
-            onClick={() => downloadFile(streamUrl, result.outputFilename)}
+            onClick={() => { downloadFile(streamUrl, result.outputFilename); }}
           >
             <Download className="size-4" data-icon="inline-start" />
             Download Enhanced Video

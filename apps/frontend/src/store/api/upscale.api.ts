@@ -1,18 +1,39 @@
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
-import type { JobStatus, JobResult } from '@/types/job.types';
-import { API_BASE_URL } from '@/config/api';
+import {
+  cancelJobContract,
+  getJobResultContract,
+  getJobStatusContract,
+  uploadVideoContract
+} from '@repo/contracts/upload';
+import { problemDetailsSchema } from '@repo/schemas/errors';
+import type { JobStatus } from '@repo/schemas/jobs';
+import type {
+  CancelJobResponse,
+  JobResult,
+  UploadResponse
+} from '@repo/schemas/upload';
+import { API_ORIGIN, buildApiUrl, interpolatePath } from '@/config/api';
 
-interface UploadArgs {
+export interface UploadArgs {
   formData: FormData;
   onProgress?: (percent: number) => void;
 }
 
-function uploadWithProgress(
-  args: UploadArgs
-): Promise<{ jobId: string }> {
+function extractProblemDetail(responseText: string): string | null {
+  try {
+    const problem = problemDetailsSchema
+      .partial()
+      .parse(JSON.parse(responseText));
+    return problem.detail ?? problem.title ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function uploadWithProgress(args: UploadArgs): Promise<UploadResponse> {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
-    xhr.open('POST', `${API_BASE_URL}/upload`);
+    xhr.open(uploadVideoContract.method, buildApiUrl(uploadVideoContract.path));
     xhr.withCredentials = true;
 
     xhr.upload.onprogress = (e) => {
@@ -23,31 +44,28 @@ function uploadWithProgress(
 
     xhr.onload = () => {
       if (xhr.status >= 200 && xhr.status < 300) {
-        resolve(JSON.parse(xhr.responseText) as { jobId: string });
-      } else {
-        let serverMessage: string | null = null;
         try {
-          const parsed = JSON.parse(xhr.responseText) as {
-            message?: string | string[];
-          };
-          if (Array.isArray(parsed.message)) {
-            serverMessage = parsed.message.join(', ');
-          } else if (typeof parsed.message === 'string') {
-            serverMessage = parsed.message;
-          }
+          resolve(
+            uploadVideoContract.responseSchema.parse(
+              JSON.parse(xhr.responseText)
+            )
+          );
         } catch {
-          serverMessage = null;
+          reject(new Error('Upload succeeded but the response was malformed'));
         }
-
+      } else {
         reject(
           new Error(
-            serverMessage ?? `Upload failed with status ${xhr.status}`,
-          ),
+            extractProblemDetail(xhr.responseText) ??
+              `Upload failed with status ${String(xhr.status)}`
+          )
         );
       }
     };
 
-    xhr.onerror = () => reject(new Error('Network error during upload'));
+    xhr.onerror = () => {
+      reject(new Error('Network error during upload'));
+    };
     xhr.send(args.formData);
   });
 }
@@ -55,12 +73,12 @@ function uploadWithProgress(
 export const upscaleApi = createApi({
   reducerPath: 'upscaleApi',
   baseQuery: fetchBaseQuery({
-    baseUrl: API_BASE_URL,
+    baseUrl: API_ORIGIN,
     credentials: 'include'
   }),
   tagTypes: ['Job'],
   endpoints: (builder) => ({
-    uploadVideo: builder.mutation<{ jobId: string }, UploadArgs>({
+    uploadVideo: builder.mutation<UploadResponse, UploadArgs>({
       queryFn: async (args) => {
         try {
           const data = await uploadWithProgress(args);
@@ -77,18 +95,24 @@ export const upscaleApi = createApi({
       invalidatesTags: ['Job']
     }),
     getJobStatus: builder.query<JobStatus, string>({
-      query: (jobId) => `/upload/status/${jobId}`,
+      query: (jobId) => interpolatePath(getJobStatusContract.path, { jobId }),
+      transformResponse: (data: unknown) =>
+        getJobStatusContract.responseSchema.parse(data),
       providesTags: (_result, _error, jobId) => [{ type: 'Job', id: jobId }]
     }),
-    cancelJob: builder.mutation<{ jobId: string }, string>({
+    cancelJob: builder.mutation<CancelJobResponse, string>({
       query: (jobId) => ({
-        url: `/upload/cancel/${jobId}`,
-        method: 'POST'
+        url: interpolatePath(cancelJobContract.path, { jobId }),
+        method: cancelJobContract.method
       }),
+      transformResponse: (data: unknown) =>
+        cancelJobContract.responseSchema.parse(data),
       invalidatesTags: (_result, _error, jobId) => [{ type: 'Job', id: jobId }]
     }),
     getJobResult: builder.query<JobResult, string>({
-      query: (jobId) => `/upload/result/${jobId}`,
+      query: (jobId) => interpolatePath(getJobResultContract.path, { jobId }),
+      transformResponse: (data: unknown) =>
+        getJobResultContract.responseSchema.parse(data),
       providesTags: (_result, _error, jobId) => [{ type: 'Job', id: jobId }]
     })
   })

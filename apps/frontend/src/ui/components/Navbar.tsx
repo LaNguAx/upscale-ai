@@ -122,7 +122,7 @@ export function Navbar() {
           variant="ghost"
           size="icon"
           className="md:hidden"
-          onClick={() => setMobileOpen(!mobileOpen)}
+          onClick={() => { setMobileOpen(!mobileOpen); }}
           aria-label="Toggle menu"
         >
           {mobileOpen ? <X className="size-5" /> : <Menu className="size-5" />}
@@ -137,7 +137,7 @@ export function Navbar() {
                 key={link.to}
                 to={link.to}
                 end={link.to === '/'}
-                onClick={() => setMobileOpen(false)}
+                onClick={() => { setMobileOpen(false); }}
                 className={({ isActive }) =>
                   cn(
                     'rounded-md px-3 py-2 text-sm font-medium transition-colors',
@@ -158,7 +158,7 @@ export function Navbar() {
               <NavLink
                 key={product.slug}
                 to={`/products/${product.slug}`}
-                onClick={() => setMobileOpen(false)}
+                onClick={() => { setMobileOpen(false); }}
                 className={({ isActive }) =>
                   cn(
                     'flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition-colors',
@@ -191,7 +191,7 @@ export function Navbar() {
               <NavLink
                 key={link.to}
                 to={link.to}
-                onClick={() => setMobileOpen(false)}
+                onClick={() => { setMobileOpen(false); }}
                 className={({ isActive }) =>
                   cn(
                     'rounded-md px-3 py-2 text-sm font-medium transition-colors',
@@ -206,7 +206,7 @@ export function Navbar() {
             ))}
 
             <Button asChild size="sm" className="mt-2">
-              <Link to="/products/pro" onClick={() => setMobileOpen(false)}>
+              <Link to="/products/pro" onClick={() => { setMobileOpen(false); }}>
                 <Crown className="size-3.5" data-icon="inline-start" />
                 Try Pro
               </Link>

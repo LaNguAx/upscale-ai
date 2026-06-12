@@ -7,7 +7,7 @@ interface JobEntry {
   submittedAt: string;
 }
 
-interface JobSliceState {
+export interface JobSliceState {
   activeJobs: JobEntry[];
 }
 

@@ -8,8 +8,11 @@ import { Button } from '@/ui/shadcn/ui/button';
 import { cn } from '@/ui/shadcn/lib/utils';
 import { formatDistanceToNow } from 'date-fns';
 import { Loader2, CheckCircle2, XCircle, Clock, CircleStop } from 'lucide-react';
-import type { JobState } from '@/types/job.types';
-import { API_BASE_URL } from '@/config/api';
+import { UPLOAD_EVENTS_ENDPOINT } from '@repo/consts/upload';
+import { getJobStatusContract } from '@repo/contracts/upload';
+import { jobUpdateSchema } from '@repo/schemas/jobs';
+import type { JobState, JobUpdate } from '@repo/schemas/jobs';
+import { buildApiUrl } from '@/config/api';
 
 interface JobStatusPanelProps {
   jobId: string;
@@ -18,14 +21,6 @@ interface JobStatusPanelProps {
   onFailed: (reason?: string) => void;
   onStop: () => void;
   isStopping: boolean;
-}
-
-interface SSEUpdate {
-  jobId: string;
-  state: JobState;
-  progress: number;
-  updatedAt: string;
-  error?: string;
 }
 
 const STATUS_CONFIG: Record<
@@ -47,7 +42,7 @@ export function JobStatusPanel({
   onStop,
   isStopping
 }: JobStatusPanelProps) {
-  const [status, setStatus] = useState<SSEUpdate | null>(null);
+  const [status, setStatus] = useState<JobUpdate | null>(null);
   const onCompletedRef = useRef(onCompleted);
   const onCancelledRef = useRef(onCancelled);
   const onFailedRef = useRef(onFailed);
@@ -55,13 +50,15 @@ export function JobStatusPanel({
   const pollIdRef = useRef<number | null>(null);
   const pollingAttemptsRef = useRef(0);
 
-  onCompletedRef.current = onCompleted;
-  onCancelledRef.current = onCancelled;
-  onFailedRef.current = onFailed;
-  isStoppingRef.current = isStopping;
+  useEffect(() => {
+    onCompletedRef.current = onCompleted;
+    onCancelledRef.current = onCancelled;
+    onFailedRef.current = onFailed;
+    isStoppingRef.current = isStopping;
+  });
 
   useEffect(() => {
-    const url = `${API_BASE_URL}/upload/events/${jobId}`;
+    const url = buildApiUrl(UPLOAD_EVENTS_ENDPOINT, { jobId });
     const es = new EventSource(url);
     let isDisposed = false;
 
@@ -73,7 +70,7 @@ export function JobStatusPanel({
       pollingAttemptsRef.current = 0;
     };
 
-    const handleTerminalState = (data: SSEUpdate) => {
+    const handleTerminalState = (data: JobUpdate) => {
       if (data.state === 'completed') {
         onCompletedRef.current();
       } else if (data.state === 'cancelled') {
@@ -108,14 +105,17 @@ export function JobStatusPanel({
         }
 
         try {
-          const response = await fetch(`${API_BASE_URL}/upload/status/${jobId}`, {
-            credentials: 'include'
-          });
+          const response = await fetch(
+            buildApiUrl(getJobStatusContract.path, { jobId }),
+            { credentials: 'include' }
+          );
           if (!response.ok) {
             return;
           }
 
-          const data = (await response.json()) as SSEUpdate;
+          const data = getJobStatusContract.responseSchema.parse(
+            await response.json()
+          );
           setStatus(data);
 
           if (
@@ -142,9 +142,9 @@ export function JobStatusPanel({
     };
 
     es.onmessage = (event) => {
-      let data: SSEUpdate;
+      let data: JobUpdate;
       try {
-        data = JSON.parse(event.data as string) as SSEUpdate;
+        data = jobUpdateSchema.parse(JSON.parse(event.data as string));
       } catch {
         es.close();
         startStatusPolling();
