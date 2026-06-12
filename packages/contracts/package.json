@@ -1,0 +1,21 @@
+{
+  "name": "@repo/contracts",
+  "type": "module",
+  "exports": {
+    "./health": "./dist/health/health.contracts.js",
+    "./upload": "./dist/upload/upload.contracts.js",
+    "./shared": "./dist/shared/endpoint.js"
+  },
+  "scripts": {
+    "dev": "tsc --watch --preserveWatchOutput",
+    "build": "tsc"
+  },
+  "dependencies": {
+    "@repo/consts": "workspace:*",
+    "@repo/schemas": "workspace:*",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@repo/typescript-config": "workspace:*"
+  }
+}

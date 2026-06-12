@@ -238,6 +238,28 @@ importers:
         specifier: ^8.0.1
         version: 8.0.2(@types/node@24.12.0)(jiti@2.6.1)(terser@5.46.1)
 
+  packages/consts:
+    devDependencies:
+      '@repo/typescript-config':
+        specifier: workspace:*
+        version: link:../typescript-config
+
+  packages/contracts:
+    dependencies:
+      '@repo/consts':
+        specifier: workspace:*
+        version: link:../consts
+      '@repo/schemas':
+        specifier: workspace:*
+        version: link:../schemas
+      zod:
+        specifier: ^4.3.6
+        version: 4.3.6
+    devDependencies:
+      '@repo/typescript-config':
+        specifier: workspace:*
+        version: link:../typescript-config
+
   packages/eslint-config:
     devDependencies:
       '@eslint/js':
@@ -267,6 +289,16 @@ importers:
       typescript-eslint:
         specifier: ^8.58.1
         version: 8.61.0(eslint@9.39.4(jiti@2.6.1))(typescript@6.0.2)
+
+  packages/schemas:
+    dependencies:
+      zod:
+        specifier: ^4.3.6
+        version: 4.3.6
+    devDependencies:
+      '@repo/typescript-config':
+        specifier: workspace:*
+        version: link:../typescript-config
 
   packages/typescript-config: {}
 

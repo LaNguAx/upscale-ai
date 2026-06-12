@@ -1,0 +1,16 @@
+{
+  "name": "@repo/consts",
+  "type": "module",
+  "exports": {
+    "./app": "./dist/app/app.consts.js",
+    "./health": "./dist/health/health.consts.js",
+    "./upload": "./dist/upload/upload.consts.js"
+  },
+  "scripts": {
+    "dev": "tsc --watch --preserveWatchOutput",
+    "build": "tsc"
+  },
+  "devDependencies": {
+    "@repo/typescript-config": "workspace:*"
+  }
+}
