@@ -35,11 +35,17 @@ The checkpoint file must have been trained with matching architecture params.
 import cv2
 import torch
 import numpy as np
+import subprocess
+import tempfile
 from pathlib import Path
 from typing import Optional, Callable, Iterator
 
 # Import the model architecture (place model_architecture.py next to this file)
 from .model_architecture import BasicVSRRecurrentSeq
+
+
+class InferenceCancelledError(RuntimeError):
+    """Raised when inference is cancelled mid-run."""
 
 
 class VSRInferenceEngine:
@@ -79,8 +85,36 @@ class VSRInferenceEngine:
         sr_rgb = (sr_tensor.numpy().transpose(1, 2, 0).clip(0, 1) * 255).astype(np.uint8)
         return cv2.cvtColor(sr_rgb, cv2.COLOR_RGB2BGR)
 
+    def _transcode_for_opencv(self, input_path: str) -> str:
+        temp_dir = tempfile.gettempdir()
+        temp_output = str(Path(temp_dir) / f"{Path(input_path).stem}_opencv_fallback.mp4")
+        command = [
+            "ffmpeg",
+            "-y",
+            "-i",
+            input_path,
+            "-an",
+            "-c:v",
+            "libx264",
+            "-pix_fmt",
+            "yuv420p",
+            "-movflags",
+            "+faststart",
+            temp_output,
+        ]
+        result = subprocess.run(command, capture_output=True, text=True)
+        if result.returncode != 0:
+            raise RuntimeError(
+                f"Cannot decode video and ffmpeg fallback failed for {input_path}: "
+                f"{result.stderr.strip() or result.stdout.strip()}"
+            )
+        return temp_output
+
     def _read_and_resize(self, input_path: str, max_height: int = 480):
-        cap = cv2.VideoCapture(input_path)
+        source_path = input_path
+        generated_fallback = None
+
+        cap = cv2.VideoCapture(source_path)
         fps = cap.get(cv2.CAP_PROP_FPS)
         if fps == 0 or fps is None:
             fps = 30.0  # fallback for broken metadata
@@ -88,7 +122,16 @@ class VSRInferenceEngine:
         ret, first = cap.read()
         if not ret:
             cap.release()
-            raise RuntimeError(f"Cannot read video: {input_path}")
+            generated_fallback = self._transcode_for_opencv(input_path)
+            source_path = generated_fallback
+            cap = cv2.VideoCapture(source_path)
+            fps = cap.get(cv2.CAP_PROP_FPS) or fps
+            ret, first = cap.read()
+            if not ret:
+                cap.release()
+                if generated_fallback and Path(generated_fallback).exists():
+                    Path(generated_fallback).unlink(missing_ok=True)
+                raise RuntimeError(f"Cannot read video: {input_path}")
         cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
 
         orig_h, orig_w = first.shape[:2]
@@ -110,6 +153,8 @@ class VSRInferenceEngine:
                 frame = cv2.resize(frame, (lr_w, lr_h), interpolation=cv2.INTER_AREA)
             frames.append(frame)
         cap.release()
+        if generated_fallback and Path(generated_fallback).exists():
+            Path(generated_fallback).unlink(missing_ok=True)
         return frames, fps, (lr_w, lr_h)
 
     @torch.no_grad()
@@ -130,7 +175,6 @@ class VSRInferenceEngine:
         idx_in_window = center - start
         out = pred[0, idx_in_window].cpu()
         del pred, window
-        torch.cuda.empty_cache()
         return out
 
     def process_video(
@@ -139,6 +183,7 @@ class VSRInferenceEngine:
         output_path: str,
         max_height: int = 480,
         progress_callback: Optional[Callable[[int, int], None]] = None,
+        should_cancel: Optional[Callable[[], bool]] = None,
     ) -> dict:
         """
         Process a full video and save enhanced output.
@@ -150,20 +195,29 @@ class VSRInferenceEngine:
         print(f"[VSR] Processing {n} frames at {lr_w}x{lr_h} -> {lr_w*4}x{lr_h*4}")
 
         lr_tensors = [self._frame_to_tensor(f) for f in frames_bgr]
+        del frames_bgr
+
+        if n == 0:
+            raise RuntimeError(f"No decodable frames found in {input_path}")
 
         sr_w, sr_h = lr_w * self.scale, lr_h * self.scale
         fourcc = cv2.VideoWriter_fourcc(*"mp4v")
         writer = cv2.VideoWriter(output_path, fourcc, fps, (sr_w, sr_h))
 
-        for i in range(n):
-            sr_tensor = self._process_window(lr_tensors, i)
-            sr_bgr = self._tensor_to_frame(sr_tensor)
-            writer.write(sr_bgr)
+        try:
+            for i in range(n):
+                if should_cancel and should_cancel():
+                    raise InferenceCancelledError("Upscaling cancelled by user")
 
-            if progress_callback:
-                progress_callback(i + 1, n)
+                sr_tensor = self._process_window(lr_tensors, i)
+                sr_bgr = self._tensor_to_frame(sr_tensor)
+                writer.write(sr_bgr)
 
-        writer.release()
+                if progress_callback:
+                    progress_callback(i + 1, n)
+        finally:
+            writer.release()
+
         print(f"[VSR] Saved: {output_path}")
 
         return {

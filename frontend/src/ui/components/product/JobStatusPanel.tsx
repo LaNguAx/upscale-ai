@@ -4,15 +4,20 @@ import { Progress } from '@/ui/shadcn/ui/progress';
 import { Alert, AlertDescription } from '@/ui/shadcn/ui/alert';
 import { Skeleton } from '@/ui/shadcn/ui/skeleton';
 import { Card, CardContent, CardHeader, CardTitle } from '@/ui/shadcn/ui/card';
+import { Button } from '@/ui/shadcn/ui/button';
 import { cn } from '@/ui/shadcn/lib/utils';
 import { formatDistanceToNow } from 'date-fns';
-import { Loader2, CheckCircle2, XCircle, Clock } from 'lucide-react';
+import { Loader2, CheckCircle2, XCircle, Clock, CircleStop } from 'lucide-react';
 import type { JobState } from '@/types/job.types';
+import { API_BASE_URL } from '@/config/api';
 
 interface JobStatusPanelProps {
   jobId: string;
   onCompleted: () => void;
-  onFailed: () => void;
+  onCancelled: (reason?: string) => void;
+  onFailed: (reason?: string) => void;
+  onStop: () => void;
+  isStopping: boolean;
 }
 
 interface SSEUpdate {
@@ -30,52 +35,145 @@ const STATUS_CONFIG: Record<
   queued: { label: 'Queued', variant: 'outline', icon: Clock },
   processing: { label: 'Processing', variant: 'secondary', icon: Loader2 },
   completed: { label: 'Completed', variant: 'default', icon: CheckCircle2 },
-  failed: { label: 'Failed', variant: 'destructive', icon: XCircle }
+  failed: { label: 'Failed', variant: 'destructive', icon: XCircle },
+  cancelled: { label: 'Cancelled', variant: 'outline', icon: CircleStop }
 };
 
-export function JobStatusPanel({ jobId, onCompleted, onFailed }: JobStatusPanelProps) {
+export function JobStatusPanel({
+  jobId,
+  onCompleted,
+  onCancelled,
+  onFailed,
+  onStop,
+  isStopping
+}: JobStatusPanelProps) {
   const [status, setStatus] = useState<SSEUpdate | null>(null);
-  const [error, setError] = useState(false);
   const onCompletedRef = useRef(onCompleted);
+  const onCancelledRef = useRef(onCancelled);
   const onFailedRef = useRef(onFailed);
+  const isStoppingRef = useRef(isStopping);
+  const pollIdRef = useRef<number | null>(null);
+  const pollingAttemptsRef = useRef(0);
 
   onCompletedRef.current = onCompleted;
+  onCancelledRef.current = onCancelled;
   onFailedRef.current = onFailed;
+  isStoppingRef.current = isStopping;
 
   useEffect(() => {
-    const url = `${import.meta.env.VITE_API_BASE_URL}/upload/events/${jobId}`;
+    const url = `${API_BASE_URL}/upload/events/${jobId}`;
     const es = new EventSource(url);
+    let isDisposed = false;
+
+    const stopPolling = () => {
+      if (pollIdRef.current !== null) {
+        window.clearInterval(pollIdRef.current);
+        pollIdRef.current = null;
+      }
+      pollingAttemptsRef.current = 0;
+    };
+
+    const handleTerminalState = (data: SSEUpdate) => {
+      if (data.state === 'completed') {
+        onCompletedRef.current();
+      } else if (data.state === 'cancelled') {
+        onCancelledRef.current(data.error);
+      } else if (data.state === 'failed') {
+        onFailedRef.current(data.error);
+      }
+    };
+
+    const startStatusPolling = () => {
+      if (pollIdRef.current !== null) {
+        return;
+      }
+
+      const handlePollingTimeout = () => {
+        stopPolling();
+        if (isStoppingRef.current) {
+          onFailedRef.current(
+            'Stop request was sent, but cancellation status could not be confirmed. Please refresh or try again.',
+          );
+          return;
+        }
+        onFailedRef.current(
+          'Lost connection to live updates and could not recover job status.',
+        );
+      };
+
+      pollIdRef.current = window.setInterval(async () => {
+        if (isDisposed) {
+          stopPolling();
+          return;
+        }
+
+        try {
+          const response = await fetch(`${API_BASE_URL}/upload/status/${jobId}`, {
+            credentials: 'include'
+          });
+          if (!response.ok) {
+            return;
+          }
+
+          const data = (await response.json()) as SSEUpdate;
+          setStatus(data);
+
+          if (
+            data.state === 'completed' ||
+            data.state === 'cancelled' ||
+            data.state === 'failed'
+          ) {
+            stopPolling();
+            handleTerminalState(data);
+            return;
+          }
+
+          pollingAttemptsRef.current += 1;
+          if (pollingAttemptsRef.current >= 30) {
+            handlePollingTimeout();
+          }
+        } catch {
+          pollingAttemptsRef.current += 1;
+          if (pollingAttemptsRef.current >= 30) {
+            handlePollingTimeout();
+          }
+        }
+      }, 1000);
+    };
 
     es.onmessage = (event) => {
-      const data = JSON.parse(event.data as string) as SSEUpdate;
+      let data: SSEUpdate;
+      try {
+        data = JSON.parse(event.data as string) as SSEUpdate;
+      } catch {
+        es.close();
+        startStatusPolling();
+        return;
+      }
+
       setStatus(data);
 
-      if (data.state === 'completed') {
+      if (data.state === 'completed' || data.state === 'cancelled' || data.state === 'failed') {
         es.close();
-        onCompletedRef.current();
-      } else if (data.state === 'failed') {
-        es.close();
-        onFailedRef.current();
+        stopPolling();
+        handleTerminalState(data);
       }
     };
 
     es.onerror = () => {
       es.close();
-      setError(true);
+      startStatusPolling();
+      if (isStoppingRef.current) {
+        return;
+      }
     };
 
-    return () => es.close();
+    return () => {
+      isDisposed = true;
+      es.close();
+      stopPolling();
+    };
   }, [jobId]);
-
-  if (error) {
-    return (
-      <Alert variant="destructive">
-        <AlertDescription>
-          Lost connection to the server. Please try again.
-        </AlertDescription>
-      </Alert>
-    );
-  }
 
   if (!status) {
     return (
@@ -113,6 +211,16 @@ export function JobStatusPanel({ jobId, onCompleted, onFailed }: JobStatusPanelP
           </div>
           <Progress value={status.progress} />
         </div>
+
+        <Button
+          variant="destructive"
+          className="w-full"
+          onClick={onStop}
+          disabled={isStopping || status.state !== 'processing'}
+        >
+          <CircleStop className="size-4" data-icon="inline-start" />
+          {isStopping ? 'Stopping Upscaling...' : 'Stop Upscaling'}
+        </Button>
 
         <div className="flex items-center justify-between text-xs text-muted-foreground">
           <span>Job ID: {jobId.slice(0, 8)}...</span>

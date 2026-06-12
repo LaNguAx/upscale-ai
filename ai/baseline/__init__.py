@@ -1,7 +1,7 @@
 """Upscale AI baseline package — V3 model (BasicVSR + SPyNet, x4, seq=15)."""
 
 from .model_architecture import BasicVSRRecurrentSeq
-from .vsr_inference import VSRInferenceEngine
+from .vsr_inference import VSRInferenceEngine, InferenceCancelledError
 
 # V3 training-time hyperparameters (must match the trained checkpoint)
 SCALE = 4
@@ -14,6 +14,7 @@ NUM_RECON_BLOCKS = 5
 __all__ = [
     "BasicVSRRecurrentSeq",
     "VSRInferenceEngine",
+    "InferenceCancelledError",
     "SCALE",
     "SEQ_LEN",
     "NUM_FEATS",
