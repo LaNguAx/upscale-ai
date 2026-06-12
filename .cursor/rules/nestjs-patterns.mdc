@@ -1,0 +1,17 @@
+---
+description: NestJS 11 patterns — modules, services, controllers, guards, pipes, DI
+alwaysApply: true
+---
+
+# NestJS patterns (NestJS 11)
+
+- **Module -> Controller -> Service**: Controllers handle HTTP concerns (parsing input, returning responses). Services handle business logic. Never put business logic in controllers; never put HTTP concerns in services.
+- **One module per domain feature**: `UsersModule`, `AuthModule`, `OrdersModule`. Each module declares its own providers, controllers, imports, and exports. Keep modules focused and self-contained.
+- **Dependency injection everywhere**: Use NestJS DI for all service dependencies. Never `new` a service manually. Constructor injection is the default; use `@Inject()` for token-based injection.
+- **Pipes for validation**: Use NestJS Pipes combined with Zod schemas to validate and transform incoming request data. Apply validation at the controller method level or globally.
+- **Guards for auth**: Use Guards for authentication and authorization checks. Guards run before interceptors and pipes, making them the correct place to reject unauthorized requests. Do not use middleware for auth.
+- **Interceptors for cross-cutting concerns**: Use Interceptors for logging, caching, response transformation, and timing. They wrap the execution pipeline without polluting business logic.
+- **Exception Filters for error responses**: Map domain errors to HTTP status codes and consistent error response shapes using Exception Filters. Do not manually construct error responses in controllers.
+- **DTOs at boundaries**: Define DTOs (Data Transfer Objects) for request and response shapes. Never expose raw database entities or internal domain objects on API boundaries.
+- **Config validation at startup**: Use `@nestjs/config` with Zod schemas to validate all environment variables when the application boots. Fail fast on missing or malformed configuration — do not let bad config surface as a runtime error later.
+- **Global prefix**: API routes use the `/api` prefix. Apply it globally via `app.setGlobalPrefix('api')` rather than repeating it on every controller.

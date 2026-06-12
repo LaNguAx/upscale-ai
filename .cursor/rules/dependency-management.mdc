@@ -1,0 +1,16 @@
+---
+description: Dependency management — evaluation, installation, maintenance, cleanup
+alwaysApply: true
+---
+
+# Dependency management
+
+- Before adding a new dependency, ask: can this be done with what is already installed? Check the existing `package.json` files across the monorepo first.
+- Evaluate new dependencies by: maintenance activity (recent commits, open issues), bundle size impact, TypeScript type support, license compatibility, and transitive dependency count.
+- Prefer well-maintained, focused packages over Swiss-army-knife libraries. Import cost matters — a 2KB utility is better than pulling in a 200KB library for one function.
+- When a dependency is used in multiple apps, install it in the shared package that owns the concern (`packages/*`) rather than duplicating it in every app.
+- Keep dependencies current: outdated packages accumulate security vulnerabilities and compatibility debt. Review and update periodically.
+- Remove unused dependencies. Dead entries in `package.json` slow installs, inflate lock files, and confuse future developers.
+- Never install a dependency for a single utility function that is under ~20 lines. Write the function locally instead.
+- Use `pnpm` for all package operations in this monorepo. Do not use `npm` or `yarn` commands.
+- When adding a dependency, verify it works with the Node.js version specified in `engines` and the TypeScript version in use.

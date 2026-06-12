@@ -1,0 +1,15 @@
+---
+description: Modularity — cohesion, coupling, dependency direction, module boundaries
+alwaysApply: true
+---
+
+# Modularity
+
+- **High cohesion**: Everything inside a module should be closely related in purpose. If a module does two unrelated things, split it into two modules.
+- **Low coupling**: Modules interact through narrow, well-defined interfaces. Changing the internals of one module should not require changes in another.
+- **Dependency direction flows inward**: Domain and business logic never import from infrastructure, transport, or framework layers. Infrastructure adapts to the domain, not the other way around.
+- **Co-locate related files**: Group a component with its hook, types, and styles in the same directory rather than scattering them across `components/`, `hooks/`, `types/` folders.
+- **Explicit public APIs**: A module's surface should be obvious. Export only what consumers need. Use `index.ts` barrel files at package or module boundaries to define the public contract.
+- **No circular dependencies**: When two modules depend on each other, extract the shared concern into a third module that both can import. Circular imports are a design smell indicating tangled responsibilities.
+- **Encapsulate decisions**: Hide implementation details (which ORM, which cache driver, which HTTP client) behind an interface. Consumers depend on the contract, not the tool.
+- **Monorepo packages as module boundaries**: In this repo, use `packages/*` for code shared across apps and `@repo/*` scopes for internal imports. Do not reach directly into another app's `src/` directory.

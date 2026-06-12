@@ -1,0 +1,17 @@
+---
+description: Clean code principles — naming, readability, function design, DRY
+alwaysApply: true
+---
+
+# Clean code
+
+- Functions do one thing and fit on screen (~30 lines max). If you need a comment to explain a section, extract it into a named function.
+- Name variables and functions by intent: `getUsersByRole`, not `getData`; `isEligible`, not `flag`.
+- No magic numbers or strings — extract to named constants with a descriptive name.
+- Avoid negated booleans: `isEnabled` not `isNotDisabled`, `hasAccess` not `lacksNoAccess`.
+- Dead code gets deleted, not commented out. Version control is the archive.
+- Prefer early returns over deep nesting — flatten the happy path.
+- DRY applies to knowledge, not syntax. Two identical lines serving different purposes are not duplication; two divergent blocks encoding the same business rule are.
+- Keep function signatures narrow: 3 parameters or fewer. Beyond that, group into an options object.
+- Avoid boolean parameters that silently change behavior — use separate functions or an options object with named fields.
+- Write code that reads top-to-bottom: callers above callees, public above private, high-level above detail.

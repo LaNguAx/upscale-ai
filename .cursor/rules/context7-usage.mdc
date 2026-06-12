@@ -1,0 +1,13 @@
+---
+description: Context7 MCP — always look up library docs before writing code
+alwaysApply: true
+---
+
+# Context7 usage
+
+- Before writing code that uses any library, framework, or SDK, look up its current documentation via the context7 MCP server first. Do not guess at API signatures from memory.
+- This applies even to well-known libraries: React, Next.js, NestJS, Tailwind, Zod, Express, Prisma, and others. Training data may not reflect the version installed in this repo.
+- When a build error, type error, or runtime error involves a library API, check context7 before attempting a fix. The API may have changed between versions.
+- Use context7 for: API syntax, configuration options, function signatures, migration guides, CLI usage, version-specific behavior, and hook/component APIs.
+- Do not use context7 for: general programming concepts, business logic design, refactoring strategy, or code review.
+- When in doubt about whether an API has changed, check. The cost of a lookup is seconds; the cost of guessing wrong is a debugging session.

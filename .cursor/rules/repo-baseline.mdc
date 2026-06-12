@@ -1,0 +1,13 @@
+---
+description: Repo-wide expectations
+alwaysApply: true
+---
+
+# UPscale baseline
+
+- This is the UPscale monorepo: video super-resolution with a React frontend, NestJS backend, and Python AI service.
+- Preserve internal `@repo/*` package scopes unless explicitly asked to rename them.
+- Prefer shared config changes over per-app drift.
+- Shared API types live in `@repo/schemas` — never duplicate request/response types in an app.
+- When workflow, structure, or standards change, update the relevant README, `AGENTS.md`, `CLAUDE.md`, and `.cursor/rules` files in the same change.
+- Before claiming success, verify the repo with the appropriate commands such as `pnpm lint` and `pnpm check-types`.

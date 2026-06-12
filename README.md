@@ -1,213 +1,95 @@
-# Upscale AI
+# UPscale
 
-AI-powered video restoration and super-resolution system. Upload a degraded video, and our deep learning pipeline enhances resolution, removes noise, and eliminates artifacts while preserving temporal consistency.
+AI-powered video restoration and super-resolution. B.Sc. Computer Science final project (Deep Learning specialization).
 
-**B.Sc. Computer Science Final Project** | Deep Learning Specialization | The College of Management Academic Studies
-
-## Overview
-
-Upscale AI bridges the gap between academic deep learning research and practical video enhancement systems. It processes legacy and archival video content — old films, documentaries, historical recordings — using a convolutional neural network that operates on temporal windows of consecutive frames.
-
-The system is built as a three-package monorepo:
-
-| Package | Stack | Purpose |
-|---------|-------|---------|
-| `frontend/` | React 19, Vite, TypeScript, Tailwind CSS v4, shadcn/ui, Redux Toolkit | Web UI for upload, progress tracking, and video playback |
-| `backend/` | NestJS 11, TypeScript, Express, Multer | API for file handling, job management, SSE progress, video streaming |
-| `ai/` | Python, PyTorch, FastAPI | Baseline VSR model training and inference server |
-
-## Architecture
+A pnpm + Turborepo monorepo with three apps and a shared full-stack contract chain:
 
 ```
-Frontend (React :5173) ←SSE→ Backend (NestJS :3000) ←NDJSON→ AI Service (FastAPI :8000)
-                                    ↕                                  ↕
-                              storage/uploads/                   storage/results/
+apps/
+├── frontend    Vite 8 + React 19 SPA (Tailwind v4, shadcn/ui, RTK Query)   :5173
+├── backend     NestJS 11 API under /api (uploads, jobs, SSE, streaming)    :3000
+└── ai          Python FastAPI + PyTorch inference service                  :8000
+packages/
+├── consts      Endpoint path strings and app constants
+├── schemas     Zod 4 schemas + inferred types (single source of truth)
+├── contracts   Typed EndpointContract objects (consts + schemas)
+├── eslint-config       Shared ESLint 9 flat-config presets
+└── typescript-config   Shared strict tsconfig presets
 ```
 
-**Data Flow:**
-1. User uploads a video through the web interface
-2. Backend stores the file and creates a processing job
-3. Backend calls the AI service with the file path
-4. AI service runs frame-by-frame inference using temporal sliding windows
-5. Real-time progress streams back: AI → Backend (NDJSON) → Frontend (SSE)
-6. Enhanced video is served via HTTP Range streaming for playback with seek support
+## How it works
 
-## Features
+1. The frontend uploads a video (`POST /api/upload`, multipart, XHR progress) and receives a `jobId`.
+2. The backend stores the file on disk (Multer), tracks the job in memory, and calls the AI service (`POST /process`), consuming an NDJSON progress stream.
+3. The AI service runs BasicVSR + SPyNet (V3 checkpoint, 4x scale) over the video frames and writes the enhanced output to `storage/results`.
+4. The frontend follows progress over SSE (`/api/upload/events/:jobId`, with polling fallback), then plays/downloads the result via HTTP Range streaming (`/api/upload/stream/:jobId`).
+5. Jobs can be cancelled end-to-end (`POST /api/upload/cancel/:jobId` bridges to the AI service).
 
-- **Video Upload** — Drag-and-drop with real-time upload progress (XHR)
-- **AI Processing** — Baseline CNN with 5-frame temporal windows, 4x PixelShuffle upscaling
-- **Live Progress** — Server-Sent Events for real-time processing status
-- **Video Streaming** — HTTP Range requests (206 Partial Content) for native `<video>` playback
-- **Product Pages** — Video Upscaler, Noise Reducer (WIP), Blur Fix (WIP), Artifact Cleaner (WIP), Upscale Pro
-- **Mock Fallback** — Full UI works without the AI service running
-- **Responsive UI** — Mobile-first design with royal blue theme
+Errors follow RFC 7807 (ProblemDetails) with a `traceId` from the request-id middleware. All request/response shapes live in `@repo/schemas`; the backend wraps them with `nestjs-zod` DTOs and the frontend validates responses against `@repo/contracts`.
 
-## Getting Started
+## Prerequisites
 
-### Prerequisites
+- Node >= 24 (see `.nvmrc`)
+- pnpm 10 (`corepack enable` or `npm i -g pnpm`)
+- Python 3.11+ with pip (for the AI service)
+- The model checkpoint at `apps/ai/checkpoints/vsr_model_best.pth` (not in git)
 
-- **Node.js** 24+
-- **pnpm** 10+
-- **Python** 3.11+ (for AI service)
-- **Git**
-
-### Installation
+## Getting started
 
 ```bash
-git clone https://github.com/LaNguAx/upscale-ai.git
-cd upscale-ai
 pnpm install
+
+# one-time Python setup
+pnpm --filter ai setup
+
+# copy env examples (optional — sane defaults exist)
+cp apps/backend/.env.development.example apps/backend/.env.development
+cp apps/frontend/.env.development.example apps/frontend/.env.development
+
+# start everything (frontend 5173, backend 3000, ai 8000)
+pnpm dev
 ```
 
-For the AI service:
-```bash
-cd ai
-pip install -r requirements.txt
-```
+Swagger UI is served at `http://localhost:3000/docs` in development.
 
-### Running
+## Commands
 
-Start each service in a separate terminal:
+| Command            | Purpose                                            |
+| ------------------ | -------------------------------------------------- |
+| `pnpm dev`         | Start all apps in watch mode                       |
+| `pnpm build`       | Build all packages and apps (bottom-up, cached)    |
+| `pnpm preview`     | Build, then run in local production-rehearsal mode |
+| `pnpm start:prod`  | Build, then run in pure production mode            |
+| `pnpm lint`        | Lint everything (`--max-warnings 0`)               |
+| `pnpm check-types` | Type-check everything                              |
+| `pnpm format`      | Prettier-format the repo                           |
 
-```bash
-# Backend (port 3000)
-pnpm -F backend start:dev
+Filter to one app: `pnpm --filter backend dev`, `pnpm --filter backend test:e2e`, etc.
 
-# Frontend (port 5173)
-pnpm -F frontend dev
+## Environment variables
 
-# AI Service (port 8000) — optional, mock fallback exists
-cd ai && python server.py
-```
+Each app commits `.env.development.example` / `.env.production.example`. Backend env is Zod-validated at startup (`apps/backend/src/utils/env.validation.ts`) — see `CLAUDE.md` for the full table. Key ones:
 
-Then open http://localhost:5173
+- backend: `PORT`, `CORS_ORIGIN`, `AI_SERVICE_URL`, `UPLOAD_DIR`, `RESULT_DIR`, `MAX_FILE_SIZE_MB`, `ALLOWED_VIDEO_EXTENSIONS`
+- frontend: `VITE_PORT`, `VITE_API_BASE_URL` (backend **origin**, no `/api` suffix)
+- ai: `CHECKPOINT_PATH`, `DEVICE`, `MAX_INPUT_HEIGHT`, `HOST`, `PORT`
 
-### Environment Variables
+## The AI model
 
-**Backend** (`backend/.env`):
-```env
-PORT=3000
-AI_SERVICE_URL=http://localhost:8000
-UPLOAD_DIR=../storage/uploads
-RESULT_DIR=../storage/results
-MAX_FILE_SIZE_MB=500
-ALLOWED_VIDEO_EXTENSIONS=.mp4,.avi,.mkv,.mov,.wmv,.webm
-```
+`apps/ai/baseline/` contains the V3 architecture: **BasicVSR with a SPyNet optical-flow backbone** (sequence length 15, 4x upscale). `vsr_inference.py` exposes `VSRInferenceEngine` with frame-window batching, progress callbacks, and cooperative cancellation. Training artifacts live in `Model_v3.ipynb`. Inference parameters are owned by the engine/checkpoint — the backend does not override them.
 
-**Frontend** (`frontend/.env.development`):
-```env
-VITE_API_BASE_URL=http://localhost:3000/api
-```
+There is **no mock fallback**: if the AI service is down or the checkpoint is missing, jobs fail with a clear error.
 
-## API Endpoints
+## Known limitations
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `POST` | `/api/upload` | Upload video (multipart/form-data), returns `{ jobId }` |
-| `GET` | `/api/upload/status/:jobId` | Job state and progress (0-100) |
-| `GET` | `/api/upload/result/:jobId` | Result metadata and download URL |
-| `GET` | `/api/upload/stream/:jobId` | Video streaming with HTTP Range support |
-| `SSE` | `/api/upload/events/:jobId` | Real-time progress via Server-Sent Events |
-| `GET` | `/api/health` | Backend health check |
+- Job state is in-memory; a backend restart loses all jobs.
+- Single-node disk storage (`storage/`, gitignored).
+- Deploy script builds the frontend but static hosting must be configured separately (see `deploy-upscale-ai.sh`).
 
-Swagger documentation available at http://localhost:3000/docs
+## Deployment
 
-## AI Model
+`deploy-upscale-ai.sh` (triggered via `.github/workflows/deploy.yml` over SSH) pulls `main`, runs `pnpm install && pnpm build`, and restarts the backend and AI service under PM2. See the script header for the remaining manual steps.
 
-The baseline model (`ResidualVSRModel`) is a CNN designed for video super-resolution:
+## Project documentation
 
-- **Input:** 5 consecutive LR frames concatenated along channel dimension (15-channel tensor)
-- **Architecture:** Conv → 10 Residual Blocks (64 features each) → PixelShuffle 4x upscaling
-- **Output:** Single enhanced frame (the central frame of the window)
-- **Loss:** L1 (Mean Absolute Error)
-- **Training:** Supervised learning with synthetically degraded video pairs
-- **Parameters:** ~1.3M
-
-The model is trained on Google Colab using publicly available video datasets (Tears of Steel, Big Buck Bunny, Sintel, Elephant's Dream). Place the trained checkpoint at `ai/checkpoints/vsr_model_best.pth`.
-
-### AI Package Structure
-
-```
-ai/
-├── baseline/
-│   ├── config.py      — Constants, seed setup, device config
-│   ├── model.py       — ResidualBlock, ResidualVSRModel
-│   ├── data.py        — Video sources, frame extraction
-│   ├── dataset.py     — CustomVideoDataset, data loading
-│   ├── metrics.py     — PSNR, SSIM, evaluation functions
-│   ├── train.py       — Training loop, optimizer, checkpointing
-│   └── inference.py   — run_video_vsr() sliding window inference
-├── server.py          — FastAPI service (/health, /process)
-├── checkpoints/       — Trained model weights (.pth)
-└── requirements.txt
-```
-
-## Project Structure
-
-```
-upscale-ai/
-├── frontend/                    # React web application
-│   ├── src/
-│   │   ├── ui/
-│   │   │   ├── pages/           # Home, Products, Product, Technology, About
-│   │   │   ├── components/      # Navbar, Footer, section components
-│   │   │   │   ├── home/        # Hero, Features, HowItWorks, CTA
-│   │   │   │   ├── product/     # VideoUploadForm, JobStatusPanel, JobResultPanel
-│   │   │   │   ├── technology/  # Pipeline, Architecture, TechStack
-│   │   │   │   └── about/       # Project, Team, Academic
-│   │   │   ├── layouts/         # RootLayout
-│   │   │   └── shadcn/          # UI primitives (button, card, badge, etc.)
-│   │   ├── store/               # Redux store, RTK Query API, job slice
-│   │   ├── styles/              # Tailwind CSS v4 theme
-│   │   ├── consts/              # Navigation, features, products config
-│   │   ├── types/               # TypeScript interfaces
-│   │   └── utils/               # Formatting utilities
-│   └── package.json
-├── backend/                     # NestJS API server
-│   ├── src/
-│   │   ├── upload/              # Upload module (controller, service, DTOs)
-│   │   │   ├── upload.controller.ts
-│   │   │   ├── upload.service.ts
-│   │   │   ├── upload.module.ts
-│   │   │   ├── processing.service.ts
-│   │   │   └── dto/
-│   │   ├── health/              # Health check module
-│   │   ├── app.module.ts
-│   │   └── main.ts
-│   ├── .env
-│   └── package.json
-├── ai/                          # Python AI package
-│   ├── baseline/                # VSR model modules
-│   ├── server.py                # FastAPI inference server
-│   ├── checkpoints/             # Model weights
-│   └── requirements.txt
-├── storage/                     # Uploaded and processed videos (gitignored)
-├── CLAUDE.md                    # Claude Code project instructions
-├── .claude/settings.json        # Claude Code hooks
-├── Upscale-Project-Characterization.pdf  # Full project specification
-├── pnpm-workspace.yaml
-└── package.json
-```
-
-## Team
-
-| Name | Role |
-|------|------|
-| **Itay Aknin** | Backend & Full-Stack Architecture Lead |
-| **Moriel Turgeman** | AI & Deep Learning Architecture Lead |
-| **Roi Forer** | Data & Evaluation Lead |
-
-**Supervisor:** Dr. Moshe Butman
-
-## Tech Stack
-
-| Layer | Technologies |
-|-------|-------------|
-| **Frontend** | React 19, Vite 8, TypeScript, Tailwind CSS v4, shadcn/ui, Redux Toolkit, RTK Query |
-| **Backend** | NestJS 11, TypeScript, Express, Multer, RxJS (SSE) |
-| **AI** | Python, PyTorch, FastAPI, OpenCV, NumPy |
-| **DevOps** | pnpm workspaces, GitHub Actions, PM2 |
-
-## License
-
-This project is developed as part of a B.Sc. Computer Science final project at The College of Management Academic Studies.
+The full project characterization (architecture decisions, pipeline design, milestones) lives in `docs/Upscale-Project-Characterization.pdf`. Agent-facing guides: `AGENTS.md` (root and per-app) and `CLAUDE.md`.

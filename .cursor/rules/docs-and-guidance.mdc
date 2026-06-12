@@ -1,0 +1,13 @@
+---
+description: Documentation and agent-guidance expectations
+globs: **/{README.md,AGENTS.md,CLAUDE.md}
+alwaysApply: false
+---
+
+# Documentation and agent guidance
+
+- Write for teams adopting this repo as a starter, not just for the current project.
+- Keep docs concise, practical, and aligned with the real workspace layout and commands.
+- Root docs should describe repo-wide behavior; app docs should add only app-specific guidance.
+- If app purpose, commands, or starter workflow changes, update the matching README and guidance files in the same change.
+- Avoid stale template language from framework generators once the starter has an opinionated baseline of its own.

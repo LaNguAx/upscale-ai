@@ -1,0 +1,16 @@
+---
+description: Zod 4 patterns — schemas as source of truth, parse not validate, composition
+alwaysApply: true
+---
+
+# Zod validation (Zod 4)
+
+- **Schemas are the source of truth**: Define shapes with `z.string()`, `z.number()`, `z.object()`, etc. The Zod schema is the single authority for both runtime validation and the TypeScript type.
+- **Parse, don't validate**: Use `schema.parse(data)` to get typed, validated output in one step. Use `schema.safeParse(data)` only when you need to handle errors without throwing (e.g., form validation with field-level messages).
+- **Infer types from schemas**: Use `z.infer<typeof schema>` to derive TypeScript types. Never manually write a type that duplicates a schema — they will drift.
+- **Share schemas across boundaries**: When frontend and backend validate the same shape (e.g., a request body), define the schema once in a shared package and import it in both apps.
+- **Compose, don't copy**: Use `.extend()`, `.merge()`, `.pick()`, `.omit()`, and `.partial()` to build schema variations from a base. Do not copy-paste fields between schemas.
+- **Validate environment variables at startup**: Define a Zod schema for all required env vars and parse `process.env` at boot time. Fail immediately on missing or malformed configuration.
+- **Coercion inside schemas**: Use `.transform()` and `.coerce` for type coercion (string to number, ISO string to Date) inside the schema definition, not in post-processing code.
+- **Custom error messages**: Provide meaningful error messages on constraints: `z.string().min(1, 'Name is required')` over bare `z.string().min(1)`.
+- **Discriminated unions for variants**: Use `z.discriminatedUnion('type', [...])` for tagged union types — it gives better error messages and performance than `z.union()`.

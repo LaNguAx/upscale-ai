@@ -1,0 +1,20 @@
+{
+  "name": "@repo/schemas",
+  "type": "module",
+  "exports": {
+    "./errors": "./dist/errors/problem-details.schemas.js",
+    "./health": "./dist/health/health.schemas.js",
+    "./jobs": "./dist/jobs/job.schemas.js",
+    "./upload": "./dist/upload/upload.schemas.js"
+  },
+  "scripts": {
+    "dev": "tsc --watch --preserveWatchOutput",
+    "build": "tsc"
+  },
+  "dependencies": {
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@repo/typescript-config": "workspace:*"
+  }
+}

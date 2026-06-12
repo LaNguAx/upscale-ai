@@ -1,0 +1,16 @@
+---
+description: Security — OWASP awareness, input validation, secrets management
+alwaysApply: true
+---
+
+# Security
+
+- Validate and sanitize all external input at system boundaries: API parameters, form data, URL params, headers, file uploads. Never trust client-side validation alone.
+- Never interpolate user input into SQL, HTML, shell commands, or template strings. Use parameterized queries, DOM APIs, and proper escaping libraries.
+- Never commit secrets, tokens, API keys, or credentials to the repository. Use environment variables loaded from `.env` files that are gitignored. Validate their presence at startup.
+- Apply least privilege everywhere: database users get only the permissions they need, API tokens are scoped to their purpose, file system access is restricted.
+- Use HTTPS for all external communication. Set security headers (`Content-Security-Policy`, `Strict-Transport-Security`, `X-Content-Type-Options`). Configure CORS explicitly — never use `*` in production.
+- Sanitize log output: never log passwords, tokens, session IDs, or personally identifiable information. Mask or redact sensitive fields before they reach the logger.
+- Keep dependencies updated to avoid known CVEs. Run `pnpm audit` periodically and treat high-severity findings as blocking issues.
+- Use `HttpOnly`, `Secure`, and `SameSite` flags on cookies. Never store authentication tokens in `localStorage`.
+- Rate-limit public endpoints. Apply authentication and authorization checks as early as possible in the request pipeline (NestJS Guards).

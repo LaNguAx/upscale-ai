@@ -1,6 +1,8 @@
 node_modules
 dist
 coverage
+.turbo
+*.tsbuildinfo
 .env
 .env.*
 !.env.example
@@ -10,7 +12,7 @@ coverage
 .vscode
 .idea
 storage
-ai/checkpoints/*.pth
+**/checkpoints/*.pth
 __pycache__
 .playwright-mcp/
 .claude/settings.local.json
