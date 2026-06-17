@@ -12,6 +12,8 @@ If you change behavior, structure, endpoints, env vars, schemas, commands, or wo
 | backend  | `PORT`                     | `3000`                             | Zod-validated at startup                           |
 | backend  | `CORS_ORIGIN`              | `*`                                | Zod-validated. Comma-separated allowlist in prod   |
 | backend  | `AI_SERVICE_URL`           | `http://localhost:8000`            | Zod-validated                                      |
+| backend  | `AI_TRANSFER_MODE`         | `path`                             | Zod enum (`path` \| `remote`)                      |
+| backend  | `AI_INTERNAL_TOKEN`        | `` (empty)                         | Zod-validated. Bearer for internal AI calls        |
 | backend  | `UPLOAD_DIR`               | `../../storage/uploads`            | Zod-validated, resolved from `apps/backend`        |
 | backend  | `RESULT_DIR`               | `../../storage/results`            | Zod-validated, resolved from `apps/backend`        |
 | backend  | `MAX_FILE_SIZE_MB`         | `500`                              | Zod-validated                                      |
@@ -21,6 +23,9 @@ If you change behavior, structure, endpoints, env vars, schemas, commands, or wo
 | ai       | `CHECKPOINT_PATH`          | `./checkpoints/vsr_model_best.pth` | Read in `server.py`                                |
 | ai       | `DEVICE`                   | auto (`cuda`/`cpu`)                | Read in `server.py`                                |
 | ai       | `MAX_INPUT_HEIGHT`         | `480`                              | Read in `server.py`                                |
+| ai       | `AI_INTERNAL_TOKEN`        | `` (empty)                         | Read in `server.py`; bearer auth when set          |
+| ai       | `WORK_UPLOAD_DIR`          | `../../storage/ai/uploads`         | Read in `server.py` (remote-mode uploads)          |
+| ai       | `WORK_RESULT_DIR`          | `../../storage/ai/results`         | Read in `server.py` (remote-mode results)          |
 | ai       | `HOST` / `PORT`            | `0.0.0.0` / `8000`                 | Read in `server.py`                                |
 
 ## Verification
