@@ -12,6 +12,21 @@ const envSchema = z.object({
   CORS_ORIGIN: z.string().default('*'),
   /** Base URL of the Python FastAPI inference service. */
   AI_SERVICE_URL: z.url().default('http://localhost:8000'),
+  /**
+   * Transport used to hand work to the AI service:
+   * - `path`: send absolute filesystem paths to `/process` (same machine or
+   *   shared volume — the historical default for local/dev).
+   * - `remote`: upload the video to `/process-upload` over multipart HTTP and
+   *   download the result back, for two-server deployments with no shared
+   *   storage.
+   */
+  AI_TRANSFER_MODE: z.enum(['path', 'remote']).default('path'),
+  /**
+   * Shared secret for internal backend-to-AI calls. When set, the backend
+   * sends `Authorization: Bearer <token>` to the AI's mutating/result
+   * endpoints. Empty disables auth (local dev only). Never log this value.
+   */
+  AI_INTERNAL_TOKEN: z.string().default(''),
   /** Upload/result directories, resolved against the backend working directory. */
   UPLOAD_DIR: z.string().default('../../storage/uploads'),
   RESULT_DIR: z.string().default('../../storage/results'),
