@@ -43,7 +43,7 @@ export function Footer() {
                   to="/products"
                   className="text-sm text-muted-foreground transition-colors hover:text-foreground"
                 >
-                  Products
+                  Upscale Video
                 </Link>
               </li>
             </ul>

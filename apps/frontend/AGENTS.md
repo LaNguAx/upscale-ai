@@ -7,20 +7,20 @@ Vite 8 + React 19 SPA. Port 5173 (`VITE_PORT`). Tailwind v4 (CSS-config in `src/
 ## Structure
 
 - `src/main.tsx` / `src/App.tsx` — entry (StrictMode, Redux `Provider`) and `RouterProvider`.
-- `src/router/index.ts` — routes: Home, Products, Product (`:slug`), Technology, About, all nested under `RootLayout` (Navbar + Footer).
+- `src/router/index.ts` — routes: Home, Products (the single upload tool, no slug), Technology, About, all nested under `RootLayout` (Navbar + Footer).
 - `src/store/` — Redux store; `store/api/upscale.api.ts` is the RTK Query API (upload with XHR progress, status, result, cancel); `store/slices/job.slice.ts` holds `activeJobs` (currently write-only scaffolding — nothing reads it).
 - `src/config/api.ts` — `API_ORIGIN` from `VITE_API_BASE_URL` (origin only, no `/api` — it strips a legacy `/api` suffix), plus `buildApiUrl`/`interpolatePath` helpers for contract paths.
 - `src/ui/pages|components|layouts` — feature components; `src/ui/shadcn/` is vendored shadcn (lint-relaxed, avoid editing). `cn()` lives at `@/ui/shadcn/lib/utils` (the `components.json` `utils` alias is stale — use the lib path).
-- `src/consts/` — frontend-only UI data (`products.ts` catalog with `isPro`/`isWip` flags, navigation, features).
+- `src/consts/` — frontend-only UI data (navigation, features).
 - `src/utils/format.ts` — `formatFileSize` (used), `formatDuration` (currently unused).
 
 ## The upscale flow
 
-Everything lives under `/products/:slug`. Only `upscaler` and `pro` accept uploads; WIP slugs show a "Coming Soon" card; unknown slugs redirect to `/products/upscaler`.
+Everything lives under `/products` — a single page for the one real model the AI service runs (BasicVSR + SPyNet, fixed 4x super-resolution). There used to be a multi-"product" catalog (Denoise/Deblur/Artifacts/Pro) and a `/products/:slug` route, but the backend never read the slug and those tools don't exist in the inference pipeline — they were removed rather than left as misleading marketing.
 
-`src/ui/pages/Product.tsx` orchestrates with a **local** `PageState` machine (`idle | uploading | processing | completed | failed | cancelled`) in `useState` — not Redux. A page refresh loses in-flight job UI state.
+`src/ui/pages/Products.tsx` orchestrates with a **local** `PageState` machine (`idle | uploading | processing | completed | failed | cancelled`) in `useState` — not Redux. A page refresh loses in-flight job UI state.
 
-1. **Upload** — `VideoUploadForm.tsx` (drag-and-drop, MIME allowlist, 500 MB client cap). `uploadVideo` in `upscale.api.ts` uses a **custom XHR in `queryFn`** because fetch has no upload progress events — do not refactor it to a plain `builder.mutation`/fetch. FormData fields: `video` (file) and `product` (slug; backend currently ignores it). Errors are parsed as RFC 7807 (`detail`/`title`).
+1. **Upload** — `VideoUploadForm.tsx` (drag-and-drop, MIME allowlist, 500 MB client cap). `uploadVideo` in `upscale.api.ts` uses a **custom XHR in `queryFn`** because fetch has no upload progress events — do not refactor it to a plain `builder.mutation`/fetch. FormData fields: `video` (file) only. Errors are parsed as RFC 7807 (`detail`/`title`).
 2. **Live updates** — `JobStatusPanel.tsx` opens a native `EventSource` to `UPLOAD_EVENTS_ENDPOINT` (SSE is **outside** RTK Query). Each message is validated with `jobUpdateSchema`. On SSE failure it falls back to polling `getJobStatusContract.path` every 1s with raw `fetch`, giving up after 30 attempts. Terminal states close the stream and notify the parent. (`useGetJobStatusQuery` exists in the RTK API but is unused by the UI.)
 3. **Cancel** — `useCancelJobMutation`; UI sets `isStopping` and waits for SSE/polling to report `cancelled` (the terminal transition is asynchronous).
 4. **Result** — `JobResultPanel.tsx` fetches metadata via `useGetJobResultQuery`, plays the video from `buildApiUrl(UPLOAD_STREAM_ENDPOINT, { jobId })` (HTTP Range), and downloads by fetching the stream as a blob named `result.outputFilename`. **The `downloadUrl` field from the API is ignored** — always build the stream URL from `@repo/consts/upload`.
