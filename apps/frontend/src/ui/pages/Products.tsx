@@ -1,137 +1,235 @@
-import { Link } from 'react-router';
-import { ArrowRight, Crown } from 'lucide-react';
+import { useState, useCallback } from 'react';
+import { ZoomIn, RotateCcw } from 'lucide-react';
 import { PageContainer } from '@/ui/components/PageContainer';
-import { SectionHeading } from '@/ui/components/SectionHeading';
-import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardDescription
-} from '@/ui/shadcn/ui/card';
-import { Badge } from '@/ui/shadcn/ui/badge';
+import { VideoUploadForm } from '@/ui/components/product/VideoUploadForm';
+import { JobStatusPanel } from '@/ui/components/product/JobStatusPanel';
+import { JobResultPanel } from '@/ui/components/product/JobResultPanel';
+import { Alert, AlertDescription } from '@/ui/shadcn/ui/alert';
 import { Button } from '@/ui/shadcn/ui/button';
-import { PRODUCTS } from '@/consts/products';
-import { cn } from '@/ui/shadcn/lib/utils';
+import {
+  useUploadVideoMutation,
+  useCancelJobMutation
+} from '@/store/api/upscale.api';
+import { useAppDispatch } from '@/store/hooks';
+import { addJob } from '@/store/slices/job.slice';
+
+type PageState =
+  | 'idle'
+  | 'uploading'
+  | 'processing'
+  | 'completed'
+  | 'failed'
+  | 'cancelled';
+
+type UploadMutationError =
+  | {
+      error?: string;
+      // The backend returns RFC 7807 ProblemDetails (`detail`/`title`); the
+      // legacy `message` shape is kept as a fallback.
+      data?: { detail?: string; title?: string; message?: string | string[] };
+      status?: string | number;
+    }
+  | undefined;
+
+function getApiErrorMessage(error: unknown): string | null {
+  const typedError = error as UploadMutationError;
+  if (!typedError) {
+    return null;
+  }
+
+  if (typeof typedError.error === 'string' && typedError.error.length > 0) {
+    return typedError.error;
+  }
+
+  const { detail, title, message } = typedError.data ?? {};
+  if (typeof detail === 'string' && detail.length > 0) {
+    return detail;
+  }
+  if (Array.isArray(message)) {
+    return message.join(', ');
+  }
+  if (typeof message === 'string' && message.length > 0) {
+    return message;
+  }
+  if (typeof title === 'string' && title.length > 0) {
+    return title;
+  }
+
+  return null;
+}
+
+function getUploadErrorMessage(error: unknown): string {
+  return (
+    getApiErrorMessage(error) ??
+    'Failed to upload video. Please check your connection and try again.'
+  );
+}
+
+function getCancelErrorMessage(error: unknown): string {
+  return (
+    getApiErrorMessage(error) ?? 'Failed to stop upscaling. Please try again.'
+  );
+}
 
 export function Products() {
-  const freeProducts = PRODUCTS.filter((p) => !p.isPro);
-  const proProduct = PRODUCTS.find((p) => p.isPro);
+  const [pageState, setPageState] = useState<PageState>('idle');
+  const [jobId, setJobId] = useState<string | null>(null);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [processingError, setProcessingError] = useState<string | null>(null);
+  const [isStopping, setIsStopping] = useState(false);
+  const [uploadVideo] = useUploadVideoMutation();
+  const [cancelJob] = useCancelJobMutation();
+  const dispatch = useAppDispatch();
+
+  const handleUpload = useCallback(
+    async (file: File) => {
+      setPageState('uploading');
+      setUploadProgress(0);
+      setUploadError(null);
+      setProcessingError(null);
+      setIsStopping(false);
+
+      try {
+        const formData = new FormData();
+        formData.append('video', file);
+
+        const result = await uploadVideo({
+          formData,
+          onProgress: (p) => {
+            setUploadProgress(p);
+          }
+        }).unwrap();
+
+        setJobId(result.jobId);
+        setPageState('processing');
+        dispatch(
+          addJob({
+            jobId: result.jobId,
+            filename: file.name,
+            submittedAt: new Date().toISOString()
+          })
+        );
+      } catch (error) {
+        setUploadError(getUploadErrorMessage(error));
+        setPageState('idle');
+      }
+    },
+    [uploadVideo, dispatch]
+  );
+
+  const handleReset = useCallback(() => {
+    setPageState('idle');
+    setJobId(null);
+    setUploadProgress(0);
+    setUploadError(null);
+    setProcessingError(null);
+    setIsStopping(false);
+  }, []);
+
+  const handleStopUpscaling = useCallback(async () => {
+    if (!jobId) return;
+    try {
+      setIsStopping(true);
+      await cancelJob(jobId).unwrap();
+    } catch (error) {
+      setProcessingError(getCancelErrorMessage(error));
+      setPageState('failed');
+      setIsStopping(false);
+    }
+  }, [cancelJob, jobId]);
 
   return (
-    <>
-      <section className="hero-gradient py-16 sm:py-20">
-        <PageContainer className="text-center">
-          <h1 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl lg:text-5xl">
-            Our Products
-          </h1>
-          <p className="mx-auto mt-4 max-w-2xl text-lg text-muted-foreground">
-            Choose the right tool for your video restoration needs, or go all-in
-            with Upscale Pro.
-          </p>
-        </PageContainer>
-      </section>
-
-      <section className="py-16 sm:py-20">
-        <PageContainer>
-          <SectionHeading
-            title="Individual Tools"
-            subtitle="Each tool targets a specific type of video degradation."
-          />
-          <div className="grid gap-6 sm:grid-cols-2">
-            {freeProducts.map((product) => (
-              <Link
-                key={product.slug}
-                to={`/products/${product.slug}`}
-                className="group"
-              >
-                <Card
-                  className={cn(
-                    'h-full transition-all hover:shadow-md hover:border-primary/30',
-                    product.isWip && 'opacity-70'
-                  )}
-                >
-                  <CardHeader>
-                    <div className="mb-3 flex size-10 items-center justify-center rounded-lg bg-primary/10 text-primary transition-colors group-hover:bg-primary/15">
-                      <product.icon className="size-5" />
-                    </div>
-                    <CardTitle className="flex items-center gap-2 text-base">
-                      {product.name}
-                      {product.isWip ? (
-                        <Badge
-                          variant="outline"
-                          className="text-[10px] font-semibold"
-                        >
-                          Coming Soon
-                        </Badge>
-                      ) : (
-                        <ArrowRight className="size-4 opacity-0 transition-opacity group-hover:opacity-100" />
-                      )}
-                    </CardTitle>
-                    <CardDescription className="text-sm leading-relaxed">
-                      {product.description}
-                    </CardDescription>
-                  </CardHeader>
-                </Card>
-              </Link>
-            ))}
+    <section className="py-16 sm:py-20">
+      <PageContainer className="max-w-2xl">
+        <div className="mb-12 text-center">
+          <div className="mx-auto mb-4 flex size-14 items-center justify-center rounded-full bg-primary/10 text-primary">
+            <ZoomIn className="size-7" />
           </div>
-        </PageContainer>
-      </section>
+          <h1 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
+            Video Upscaler
+          </h1>
+          <p className="mt-3 text-lg text-muted-foreground max-w-xl mx-auto">
+            Increase video resolution 4x using our BasicVSR-based deep
+            learning super-resolution model, recovering fine spatial detail
+            lost in low-resolution recordings.
+          </p>
+        </div>
 
-      {proProduct && (
-        <section className="py-16 sm:py-20">
-          <PageContainer className="max-w-3xl">
-            <Card
-              className={cn(
-                'relative overflow-hidden border-2 border-amber-500/30',
-                'bg-gradient-to-br from-amber-50/50 via-background to-amber-50/30'
-              )}
-            >
-              <div className="absolute right-0 top-0 h-32 w-32 bg-gradient-to-bl from-amber-500/10 to-transparent" />
-              <CardHeader className="items-center text-center p-8 sm:p-10">
-                <div className="mb-4 flex size-16 items-center justify-center rounded-full bg-gradient-to-br from-amber-400 to-amber-600 text-white shadow-lg">
-                  <Crown className="size-8" />
-                </div>
-                <div className="flex items-center gap-2">
-                  <CardTitle className="text-2xl sm:text-3xl">
-                    {proProduct.name}
-                  </CardTitle>
-                  <Badge className="bg-gradient-to-r from-amber-500 to-amber-600 text-white border-0 text-xs font-bold">
-                    PRO
-                  </Badge>
-                </div>
-                <CardDescription className="mt-3 max-w-lg text-base leading-relaxed">
-                  {proProduct.description}
-                </CardDescription>
+        {uploadError && (
+          <Alert variant="destructive" className="mb-6">
+            <AlertDescription>{uploadError}</AlertDescription>
+          </Alert>
+        )}
 
-                <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
-                  {freeProducts.map((p) => (
-                    <Badge key={p.slug} variant="secondary" className="gap-1.5">
-                      <p.icon className="size-3" />
-                      {p.shortName}
-                    </Badge>
-                  ))}
-                  <span className="text-xs text-muted-foreground">
-                    — all in one pass
-                  </span>
-                </div>
+        {(pageState === 'idle' || pageState === 'uploading') && (
+          <VideoUploadForm
+            onUpload={(file) => {
+              void handleUpload(file);
+            }}
+            isUploading={pageState === 'uploading'}
+            uploadProgress={uploadProgress}
+          />
+        )}
 
-                <Button
-                  asChild
-                  size="lg"
-                  className="mt-8 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white border-0"
-                >
-                  <Link to="/products/pro">
-                    <Crown className="size-4" data-icon="inline-start" />
-                    Try Upscale Pro
-                    <ArrowRight className="size-4" data-icon="inline-end" />
-                  </Link>
-                </Button>
-              </CardHeader>
-            </Card>
-          </PageContainer>
-        </section>
-      )}
-    </>
+        {pageState === 'processing' && jobId && (
+          <JobStatusPanel
+            jobId={jobId}
+            onCompleted={() => {
+              setPageState('completed');
+            }}
+            onCancelled={(reason) => {
+              setProcessingError(reason ?? 'Upscaling cancelled by user.');
+              setPageState('cancelled');
+              setIsStopping(false);
+            }}
+            onFailed={(reason) => {
+              setProcessingError(
+                reason ?? 'AI inference failed. Please try again.'
+              );
+              setPageState('failed');
+              setIsStopping(false);
+            }}
+            onStop={() => {
+              void handleStopUpscaling();
+            }}
+            isStopping={isStopping}
+          />
+        )}
+
+        {pageState === 'completed' && jobId && (
+          <JobResultPanel jobId={jobId} onReset={handleReset} />
+        )}
+
+        {pageState === 'failed' && (
+          <div className="space-y-4">
+            <Alert variant="destructive">
+              <AlertDescription>
+                {processingError ??
+                  'Video processing failed. This may be due to an unsupported format or a server issue.'}
+              </AlertDescription>
+            </Alert>
+            <Button variant="outline" onClick={handleReset} className="w-full">
+              <RotateCcw className="size-4" data-icon="inline-start" />
+              Try Again
+            </Button>
+          </div>
+        )}
+
+        {pageState === 'cancelled' && (
+          <div className="space-y-4">
+            <Alert>
+              <AlertDescription>
+                {processingError ?? 'Upscaling cancelled successfully.'}
+              </AlertDescription>
+            </Alert>
+            <Button variant="outline" onClick={handleReset} className="w-full">
+              <RotateCcw className="size-4" data-icon="inline-start" />
+              Upload New Video
+            </Button>
+          </div>
+        )}
+      </PageContainer>
+    </section>
   );
 }

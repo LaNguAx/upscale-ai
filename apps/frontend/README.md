@@ -15,13 +15,12 @@ The backend (`apps/backend`, port 3000) must be running for the upscale flow; fo
 
 ## Pages
 
-| Route             | Page                                                             |
-| ----------------- | ---------------------------------------------------------------- |
-| `/`               | Home (hero, features, how-it-works)                              |
-| `/products`       | Product catalog                                                  |
-| `/products/:slug` | Product page — `upscaler` and `pro` host the working upload flow |
-| `/technology`     | Tech overview (pipeline, architecture, stack)                    |
-| `/about`          | Project, team, academic context                                  |
+| Route          | Page                                            |
+| -------------- | ------------------------------------------------ |
+| `/`            | Home (hero, features, how-it-works)               |
+| `/products`    | Video Upscaler — the one working upload flow      |
+| `/technology`  | Tech overview (pipeline, architecture, stack)      |
+| `/about`       | Project, team, academic context                    |
 
 ## Configuration
 
