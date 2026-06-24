@@ -72,7 +72,6 @@ States: `queued → processing → completed | failed | cancelled`. Terminal sta
 
 - Jobs live only in memory: lost on restart, never cleaned up (disk files included). No queue — concurrent uploads hit the AI service concurrently. No auth or rate limiting.
 - `result.downloadUrl` is a relative path (`/api/upload/stream/{jobId}`); `outputFilename` is a display name (`{base}_enhanced_by_upscale{ext}`) — the file on disk is `{jobId}_enhanced{ext}`.
-- The Swagger-documented `product` form field on upload is accepted but never read.
 - Multer's `fileFilter` rejects via plain `Error`, so a rejected extension may not produce a clean ProblemDetails.
 - Range parsing does not bounds-check `start`/`end` against the file size.
 

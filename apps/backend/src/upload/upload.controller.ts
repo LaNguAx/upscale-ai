@@ -61,8 +61,7 @@ export class UploadController {
     schema: {
       type: 'object',
       properties: {
-        video: { type: 'string', format: 'binary' },
-        product: { type: 'string' }
+        video: { type: 'string', format: 'binary' }
       },
       required: ['video']
     }

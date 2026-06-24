@@ -7,27 +7,27 @@ import { Separator } from '@/ui/shadcn/ui/separator';
 const TOPICS = [
   {
     icon: Layers,
-    title: 'Temporal Windows & the Baseline CNN',
+    title: 'BasicVSR: Flow-Aligned Recurrent Propagation',
     paragraphs: [
-      'The core idea behind video super-resolution is that a single degraded frame does not contain enough information to fully reconstruct a high-quality version. However, neighboring frames in a video sequence often capture slightly different perspectives of the same scene due to motion. By processing multiple consecutive frames together, the model can combine complementary information and produce a result that surpasses what any single frame could provide.',
-      'Our baseline architecture takes a fixed-size window of consecutive frames (e.g. 7 frames) and concatenates them along the channel dimension. A standard RGB frame has 3 channels — so 7 frames produce a 21-channel input tensor. This tensor is passed through a series of convolutional layers that learn to extract and merge spatio-temporal features across all frames simultaneously.'
+      'The core idea is that a single degraded frame does not contain enough information to fully reconstruct a high-quality version, but neighboring frames captured slightly different perspectives of the same scene due to motion. The model exploits this by propagating information between frames rather than processing each one in isolation.',
+      'A shared CNN extracts features from every frame in a 15-frame window. SPyNet, a pretrained optical-flow network, then estimates the motion between each pair of neighboring frames. Features are propagated through the window twice — backward and forward — and at each step the previous propagated state is warped using the estimated flow before merging with the current frame, so moving content stays spatially aligned instead of blurring together.'
     ],
     highlights: [
       {
         label: 'Input',
-        value: 'N consecutive frames concatenated (N × 3 channels)'
+        value: '15-frame window, processed frame-by-frame (not concatenated)'
       },
       {
         label: 'Output',
-        value: 'Single enhanced central frame at target resolution'
+        value: 'One enhanced frame per window, taken from its center'
       },
       {
         label: 'Alignment',
-        value: 'Implicit — learned by convolutions, no explicit optical flow'
+        value: 'Explicit — optical flow from a pretrained SPyNet, fine-tuned at a lower learning rate'
       },
       {
         label: 'Upscaling',
-        value: 'Sub-pixel convolution layers for 2× or 4× super-resolution'
+        value: 'Pixel-shuffle convolutions, fixed at 4x'
       }
     ]
   },
@@ -35,26 +35,26 @@ const TOPICS = [
     icon: Target,
     title: 'Loss Functions',
     paragraphs: [
-      'The loss function defines what "good output" means to the model during training. We use a combination of two complementary objectives that together balance pixel-level accuracy with perceptual quality.',
-      'L1 Loss (Mean Absolute Error) is the primary reconstruction loss. It measures the average absolute difference between each predicted pixel and the corresponding ground-truth pixel. L1 was chosen over L2 (Mean Squared Error) because L2 over-penalizes large errors, which causes the model to produce blurry "average" outputs. L1 preserves sharper edges and finer details.',
-      'Perceptual Loss is an optional secondary objective. Instead of comparing pixels directly, it passes both the predicted and ground-truth frames through a pretrained classification network (e.g. VGG) and compares their internal feature representations. This encourages the output to match the high-level visual structure, texture, and style of the ground truth — capturing qualities that pixel-wise metrics miss.'
+      'The loss function defines what "good output" means to the model during training. We use a weighted combination of three complementary objectives.',
+      'Charbonnier loss (a smooth, differentiable approximation of L1) is the primary reconstruction term — it penalizes pixel-wise error while staying more stable near zero than plain L1. A Sobel edge loss compares image gradients between prediction and target, pushing the model toward sharper edges. A VGG19-based perceptual loss compares deep feature activations of both images, encouraging realistic texture beyond what pixel-wise terms capture.',
+      'The three terms are combined with fixed weights (Charbonnier 1.0, edge 0.05, perceptual 0.1) into a single training objective.'
     ],
     highlights: [
       {
-        label: 'L1 Loss',
-        value: 'Pixel-wise accuracy, sharp edges, stable training'
+        label: 'Charbonnier',
+        value: 'Primary reconstruction loss, weight 1.0'
       },
       {
-        label: 'Perceptual Loss',
-        value: 'Texture fidelity, structural similarity, visual realism'
+        label: 'Sobel edge loss',
+        value: 'Gradient-matching for sharper edges, weight 0.05'
+      },
+      {
+        label: 'VGG19 perceptual',
+        value: 'Deep feature matching for realistic texture, weight 0.1'
       },
       {
         label: 'Composition',
-        value: 'Weighted sum — weights are tunable per experiment'
-      },
-      {
-        label: 'Temporal',
-        value: 'Implicitly enforced via consecutive-frame training pairs'
+        value: 'Fixed-weight weighted sum of all three terms'
       }
     ]
   },
@@ -62,9 +62,9 @@ const TOPICS = [
     icon: BarChart3,
     title: 'Evaluation Metrics',
     paragraphs: [
-      'Measuring the quality of restored video is a multi-faceted problem. A frame can be pixel-perfect but perceptually flat, or slightly imprecise per-pixel but visually stunning. We use multiple complementary metrics to capture different aspects of quality.',
-      'PSNR (Peak Signal-to-Noise Ratio) measures the ratio between the maximum possible signal power and the power of the distortion. Higher PSNR generally indicates better reconstruction fidelity, but it does not always correlate with human perception — two images with identical PSNR can look very different to the eye.',
-      'SSIM (Structural Similarity Index) goes beyond pixel differences by measuring changes in structural information, luminance, and contrast. It better reflects perceived image quality by considering how humans perceive visual patterns. We also use perceptual metrics based on deep feature distances for a more holistic assessment. All quantitative metrics are complemented by visual inspection on real legacy footage.'
+      'Measuring the quality of restored video is a multi-faceted problem. A frame can be pixel-perfect but perceptually flat, or slightly imprecise per-pixel but visually convincing. We track multiple metrics and always compare against a bicubic-upscaling baseline rather than looking at absolute numbers alone.',
+      'PSNR (Peak Signal-to-Noise Ratio) measures pixel-level reconstruction fidelity in dB — higher is better, though it does not always correlate with human perception.',
+      'SSIM (Structural Similarity Index) measures structural and luminance similarity, better reflecting perceived quality. Both metrics are reported as the model’s gain over a simple bicubic upscale of the same input, which is the baseline the model needs to beat to justify the extra cost.'
     ],
     highlights: [
       {
@@ -76,19 +76,22 @@ const TOPICS = [
         value: 'Structural similarity (0–1 scale, closer to 1 is better)'
       },
       {
-        label: 'Perceptual',
-        value: 'Deep feature distance from pretrained networks'
+        label: 'Baseline',
+        value: 'Bicubic upscale of the same input frame'
       },
-      { label: 'Visual', value: 'Human inspection on real degraded footage' }
+      {
+        label: 'Reported',
+        value: 'PSNR/SSIM gain over the bicubic baseline'
+      }
     ]
   },
   {
     icon: GitBranch,
     title: 'Training Strategy',
     paragraphs: [
-      'A fundamental challenge in video restoration is the absence of paired real-world data. There is no dataset of the same video captured in both "old, degraded" and "pristine" quality. To solve this, we use a supervised learning approach with synthetically generated training pairs.',
-      'We start with high-quality video clips (1080p or higher, minimal compression, clean recordings) as ground truth. Each clip is then passed through a synthetic degradation pipeline that simulates the artifacts found in real legacy footage: spatial downscaling (1080p → 360p/480p), Gaussian noise injection, mild blur (focus and motion), and aggressive compression (low-bitrate H.264 encoding). The degraded version becomes the input, and the original becomes the target.',
-      'The model is trained on short clips of consecutive frames (not full videos) to keep memory requirements manageable. The dataset is split into training, validation, and test subsets. The validation set guides hyperparameter tuning and model selection, while the test set is reserved for final evaluation — never seen during training. This ensures results are not overfit to the training distribution.'
+      'A fundamental challenge in video restoration is the absence of paired real-world data — there is no dataset of the same footage in both "old, degraded" and "pristine" quality. To solve this, we use supervised learning with synthetically generated training pairs.',
+      'We start with high-quality video clips as ground truth. Each frame is passed through a randomized degradation function before downscaling: Gaussian blur (60% chance), motion blur (15% chance), Gaussian noise (60% chance, varying intensity), and JPEG re-compression (60% chance, varying quality) — each applied independently and randomly per frame. The degraded, downscaled version becomes the model input; the original becomes the target.',
+      'The model trains on short 15-frame clips (not full videos) with a 64px patch size to keep memory requirements manageable. Data is split into training, validation, and test sets with strict separation — the test set is only used for final evaluation, never during training or model selection.'
     ],
     highlights: [
       {
@@ -97,15 +100,15 @@ const TOPICS = [
       },
       {
         label: 'Degradations',
-        value: 'Downscaling + noise + blur + compression artifacts'
+        value: 'Randomized blur, motion blur, noise, and JPEG compression'
       },
       {
         label: 'Data split',
         value: 'Train / validation / test — strict separation'
       },
       {
-        label: 'Generalization',
-        value: 'Tested on real legacy footage not seen during training'
+        label: 'Note',
+        value: 'Degradation is training-time only — inference upscales the input as-is, with no separate denoise/deblur step'
       }
     ]
   }

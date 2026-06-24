@@ -12,27 +12,28 @@ export function TechHero() {
           The Technology Behind Upscale AI
         </h1>
         <p className="mx-auto mt-4 max-w-2xl text-lg text-muted-foreground">
-          A deep learning pipeline that processes video frame-by-frame using
-          temporal windows, restoring quality while maintaining smooth,
-          consistent motion.
+          BasicVSR with a SPyNet optical-flow estimator: a bidirectional
+          recurrent network that explicitly aligns neighboring frames before
+          upscaling, instead of just stacking frames into a CNN.
         </p>
         <div className="mx-auto mt-8 grid max-w-3xl gap-6 text-left sm:grid-cols-3">
           <div className="rounded-lg border border-border bg-background/60 p-4 backdrop-blur-sm">
-            <p className="text-2xl font-bold text-primary">5 Stages</p>
+            <p className="text-2xl font-bold text-primary">6 Stages</p>
             <p className="mt-1 text-sm text-muted-foreground">
               End-to-end pipeline from raw video input to enhanced output
             </p>
           </div>
           <div className="rounded-lg border border-border bg-background/60 p-4 backdrop-blur-sm">
-            <p className="text-2xl font-bold text-primary">3–7 Frames</p>
+            <p className="text-2xl font-bold text-primary">15-Frame Window</p>
             <p className="mt-1 text-sm text-muted-foreground">
-              Temporal window size for exploiting inter-frame information
+              Sliding window centered on each output frame, with explicit
+              optical-flow alignment between frames
             </p>
           </div>
           <div className="rounded-lg border border-border bg-background/60 p-4 backdrop-blur-sm">
-            <p className="text-2xl font-bold text-primary">Up to 4x</p>
+            <p className="text-2xl font-bold text-primary">Fixed 4x</p>
             <p className="mt-1 text-sm text-muted-foreground">
-              Spatial upscaling from 360p/480p to Full HD and beyond
+              Spatial upscaling, e.g. 480p input to 1080p+ output
             </p>
           </div>
         </div>

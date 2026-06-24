@@ -1,4 +1,12 @@
-import { FileVideo, Layers, Cpu, Grid3X3, Film, ArrowDown } from 'lucide-react';
+import {
+  FileVideo,
+  Layers,
+  Waypoints,
+  Repeat,
+  Grid3X3,
+  Film,
+  ArrowDown
+} from 'lucide-react';
 import { PageContainer } from '@/ui/components/PageContainer';
 import { SectionHeading } from '@/ui/components/SectionHeading';
 import { Card, CardContent, CardHeader, CardTitle } from '@/ui/shadcn/ui/card';
@@ -6,61 +14,69 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/ui/shadcn/ui/card';
 const PIPELINE_STEPS = [
   {
     icon: FileVideo,
-    title: 'Frame Extraction',
+    title: 'Frame Extraction & Resize',
     description:
-      'The input video is decomposed into a sequence of individual frames. This step converts the compressed video stream into raw image data that the neural network can process.',
+      'The input video is decoded frame-by-frame with OpenCV (falling back to an ffmpeg transcode if the container is not directly decodable). All frames are loaded into memory before processing.',
     details: [
-      'Preserves the original frame rate (e.g. 24fps, 30fps) and temporal ordering',
+      'Preserves the original frame rate and temporal ordering',
       'Handles common container formats: MP4, AVI, MKV, MOV, WebM',
-      'Extracts frames as normalized tensor representations ready for GPU processing',
-      'Stores metadata (resolution, duration, codec) for later video reconstruction'
+      'Frames taller than the configured max height are downscaled (aspect ratio preserved) to keep inference within GPU memory limits',
+      'The model always upscales the input as-is — there is no separate denoising or artifact-removal stage'
     ]
   },
   {
     icon: Layers,
-    title: 'Temporal Window Creation',
+    title: 'Sliding 15-Frame Window',
     description:
-      'Rather than processing each frame in isolation, frames are grouped into overlapping sliding windows of 3–7 consecutive frames. This is a critical step that separates video super-resolution from single-image approaches.',
+      'Rather than transforming the whole video in one pass, every output frame is produced from its own 15-frame window centered on it. This is what lets the model exploit motion between frames instead of upscaling each one in isolation.',
     details: [
-      'A window centered on frame N includes frames [N-3, N-2, N-1, N, N+1, N+2, N+3] for a window size of 7',
-      'Overlapping windows ensure every frame benefits from neighboring context',
-      'Allows the model to detect motion, exploit temporal redundancy, and avoid flickering',
-      'At video boundaries, frames are replicated to maintain consistent window sizes'
+      'A window centered on frame N covers frames [N-7 .. N+7]',
+      'Near the start/end of the video, the window is padded by repeating the boundary frame',
+      'Each window is run independently through the full network — only the center frame’s output is kept',
+      'This per-frame windowing is what allows progress reporting and mid-job cancellation'
     ]
   },
   {
-    icon: Cpu,
-    title: 'CNN Enhancement',
+    icon: Waypoints,
+    title: 'Feature Extraction & Optical Flow',
     description:
-      'Each temporal window is fed into a convolutional neural network (CNN). The consecutive frames are concatenated along the channel dimension — so instead of a single 3-channel RGB image, the network receives a multi-frame tensor (e.g. 21 channels for 7 RGB frames).',
+      'Each frame in the window is passed through a shared convolutional feature extractor. In parallel, SPyNet — a pretrained spatial-pyramid network — estimates the optical flow between every pair of neighboring frames in both directions.',
     details: [
-      'Convolutional layers extract spatio-temporal features across all frames simultaneously',
-      'The network learns to align information between neighboring frames without explicit optical flow',
-      'The output is a single enhanced frame — the central frame of the window — with improved resolution and reduced artifacts',
-      'Optional 2x or 4x spatial upscaling via learned upsampling layers (sub-pixel convolution)'
+      'SPyNet weights are pretrained, then fine-tuned at a lower learning rate during training',
+      'Flow is estimated explicitly, not learned implicitly by the main network — this is the key difference from single-image super-resolution',
+      'The estimated flow is later used to warp propagated features so they stay spatially aligned with the current frame'
+    ]
+  },
+  {
+    icon: Repeat,
+    title: 'Bidirectional Recurrent Propagation',
+    description:
+      'Features flow through the window twice: once backward (last frame to first) and once forward (first to last). At each step, the previous propagated state is warped using the optical flow before being merged with the current frame’s features through residual blocks.',
+    details: [
+      'Backward and forward propagation each use their own stack of residual blocks',
+      'Warping with explicit flow keeps moving objects aligned across frames instead of blurring them together',
+      'This recurrent, flow-aligned design is what BasicVSR uses instead of channel-concatenating frames into a single CNN'
     ]
   },
   {
     icon: Grid3X3,
-    title: 'Frame Reconstruction',
+    title: 'Fusion & 4x Upsampling',
     description:
-      'As the sliding window moves across the video, enhanced frames are collected one by one. Each processed window contributes one restored central frame to the output sequence.',
+      'For the window’s center frame, the forward and backward propagated features are fused and passed through a pixel-shuffle upsampler that increases spatial resolution by a fixed factor of 4x.',
     details: [
-      'Frames are reordered to match the original temporal sequence',
-      'Overlapping window processing ensures seamless transitions with no gaps',
-      'Output frames maintain the same spatial alignment as the input, only at higher quality',
-      'GPU acceleration enables processing hundreds of windows per minute'
+      'Fusion combines both propagation directions through residual blocks before upsampling',
+      'Pixel-shuffle convolutions perform the learned upscaling in two 2x stages',
+      'The scale factor is fixed at training time — it is not configurable per request'
     ]
   },
   {
     icon: Film,
     title: 'Video Assembly',
     description:
-      'The final stage encodes all enhanced frames back into a playable video file. The output preserves the original temporal structure while delivering significantly improved visual quality.',
+      'As each output frame is produced, it is written directly to the result video at the input frame rate and resolution multiplied by the upscale factor.',
     details: [
-      'Re-encodes frames using modern codecs (H.264/H.265) with quality-optimized settings',
-      'Preserves original frame rate, duration, and aspect ratio',
-      'Output resolution matches the upscaling factor (e.g. 480p input → 1080p output at 2x)',
+      'Frames are written in original temporal order as they complete',
+      'Output resolution is exactly 4x the (possibly resized) input resolution',
       'The resulting file is ready for immediate playback and download'
     ]
   }
@@ -72,7 +88,7 @@ export function PipelineSection() {
       <PageContainer className="max-w-3xl">
         <SectionHeading
           title="End-to-End Pipeline"
-          subtitle="From degraded input to enhanced output — every video passes through these five stages."
+          subtitle="From low-resolution input to enhanced output — every video passes through these six stages."
         />
         <div className="space-y-4">
           {PIPELINE_STEPS.map((step, index) => (

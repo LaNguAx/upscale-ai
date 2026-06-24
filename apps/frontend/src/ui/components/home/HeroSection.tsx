@@ -25,7 +25,7 @@ export function HeroSection() {
             </p>
             <div className="mt-8 flex flex-wrap gap-4">
               <Button asChild size="lg">
-                <Link to="/products/pro">
+                <Link to="/products">
                   <Play className="size-4" data-icon="inline-start" />
                   Try It Now
                 </Link>
