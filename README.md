@@ -20,10 +20,17 @@ packages/
 ## How it works
 
 1. The frontend uploads a video (`POST /api/upload`, multipart, XHR progress) and receives a `jobId`.
-2. The backend stores the file on disk (Multer), tracks the job in memory, and calls the AI service (`POST /process`), consuming an NDJSON progress stream.
-3. The AI service runs BasicVSR + SPyNet (V3 checkpoint, 4x scale) over the video frames and writes the enhanced output to `storage/results`.
+2. The backend stores the file on disk (Multer), tracks the job in memory, and hands it to the AI service, consuming an NDJSON progress stream. The transport depends on `AI_TRANSFER_MODE` (see below).
+3. The AI service runs BasicVSR + SPyNet (V3 checkpoint, 4x scale) over the video frames. The backend saves the enhanced output to `storage/results` (downloading it from the AI service in `remote` mode).
 4. The frontend follows progress over SSE (`/api/upload/events/:jobId`, with polling fallback), then plays/downloads the result via HTTP Range streaming (`/api/upload/stream/:jobId`).
 5. Jobs can be cancelled end-to-end (`POST /api/upload/cancel/:jobId` bridges to the AI service).
+
+### Single-server vs two-server (`AI_TRANSFER_MODE`)
+
+The backend↔AI transport is selectable so the same code runs locally and across two machines:
+
+- **`path`** (default): the backend sends absolute filesystem paths to the AI's `/process` endpoint. Requires the backend and AI service to share a disk (same machine or volume). Ideal for local development.
+- **`remote`**: the backend uploads the video to the AI's `/process-upload` endpoint over multipart HTTP and downloads the finished result from `/result/:jobId`. This supports the real deployment — an **app server** (frontend, backend, upload/result storage) and a separate **GPU server** running the AI service, with **no shared storage** between them. The two services authenticate internal calls with a shared `AI_INTERNAL_TOKEN`; the frontend always talks only to the backend, never to the GPU server. The public API and frontend UX are identical in both modes.
 
 Errors follow RFC 7807 (ProblemDetails) with a `traceId` from the request-id middleware. All request/response shapes live in `@repo/schemas`; the backend wraps them with `nestjs-zod` DTOs and the frontend validates responses against `@repo/contracts`.
 
@@ -76,9 +83,11 @@ Filter to one app: `pnpm --filter backend dev`, `pnpm --filter backend test:e2e`
 
 Each app commits `.env.development.example` / `.env.production.example`. Backend env is Zod-validated at startup (`apps/backend/src/utils/env.validation.ts`) — see `CLAUDE.md` for the full table. Key ones:
 
-- backend: `PORT`, `CORS_ORIGIN`, `AI_SERVICE_URL`, `UPLOAD_DIR`, `RESULT_DIR`, `MAX_FILE_SIZE_MB`, `ALLOWED_VIDEO_EXTENSIONS`
+- backend: `PORT`, `CORS_ORIGIN`, `AI_SERVICE_URL`, `AI_TRANSFER_MODE` (`path` | `remote`), `AI_INTERNAL_TOKEN`, `UPLOAD_DIR`, `RESULT_DIR`, `MAX_FILE_SIZE_MB`, `ALLOWED_VIDEO_EXTENSIONS`
 - frontend: `VITE_PORT`, `VITE_API_BASE_URL` (backend **origin**, no `/api` suffix)
-- ai: `CHECKPOINT_PATH`, `DEVICE`, `MAX_INPUT_HEIGHT`, `HOST`, `PORT`
+- ai: `CHECKPOINT_PATH`, `DEVICE`, `MAX_INPUT_HEIGHT`, `HOST`, `PORT`, `AI_INTERNAL_TOKEN`, `WORK_UPLOAD_DIR`, `WORK_RESULT_DIR`
+
+For a two-server deployment set `AI_TRANSFER_MODE=remote`, point `AI_SERVICE_URL` at the GPU server's internal address, and set the **same** `AI_INTERNAL_TOKEN` on both the backend and the AI service. Keep the demo upload cap small (e.g. `MAX_FILE_SIZE_MB=20`). The concrete server addresses, domain, Nginx/PM2/SSL setup are handled by infrastructure tooling, not this repo.
 
 ## The AI model
 
@@ -88,8 +97,10 @@ There is **no mock fallback**: if the AI service is down or the checkpoint is mi
 
 ## Known limitations
 
-- Job state is in-memory; a backend restart loses all jobs.
-- Single-node disk storage (`storage/`, gitignored).
+- Job state is in-memory; a backend restart loses all jobs. No DB persistence.
+- No automatic cleanup of old jobs or files (uploads, results, and AI work dirs grow until cleared manually).
+- Single-node disk storage per server (`storage/`, gitignored); there is no shared storage between the app and GPU servers — `remote` mode exists precisely because of this.
+- The recommended public-demo upload cap is small (`MAX_FILE_SIZE_MB=20`).
 - Deploy script builds the frontend but static hosting must be configured separately (see `deploy-upscale-ai.sh`).
 
 ## Deployment

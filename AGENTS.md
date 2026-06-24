@@ -19,8 +19,8 @@ Stale docs are treated as bugs. Per-app `CLAUDE.md` files are one-line `@AGENTS.
 ### Apps
 
 - `apps/frontend` — Vite 8 + React 19 SPA (port 5173 via `VITE_PORT`). Tailwind v4, shadcn/ui, Redux Toolkit + RTK Query, React Router 7. See `apps/frontend/AGENTS.md`.
-- `apps/backend` — NestJS 11 API under `/api` prefix (port 3000 via `PORT`, Swagger UI at `/docs` in dev). Multer disk uploads, SSE job updates, HTTP Range streaming. Bridges to the AI service over HTTP NDJSON. See `apps/backend/AGENTS.md`.
-- `apps/ai` — Python FastAPI + PyTorch BasicVSR/SPyNet inference service (port 8000). Managed via `requirements.txt`; the `package.json` only wraps uvicorn for Turborepo. Run `pnpm --filter ai setup` once to install Python deps. See `apps/ai/AGENTS.md`.
+- `apps/backend` — NestJS 11 API under `/api` prefix (port 3000 via `PORT`, Swagger UI at `/docs` in dev). Multer disk uploads, SSE job updates, HTTP Range streaming. Bridges to the AI service over HTTP NDJSON in either `path` or `remote` transport mode (`AI_TRANSFER_MODE`). See `apps/backend/AGENTS.md`.
+- `apps/ai` — Python FastAPI + PyTorch BasicVSR/SPyNet inference service (port 8000). Exposes `/health`, path-based `/process`, multipart `/process-upload`, `/result/:jobId`, and `/cancel` (token-guarded internal endpoints). Managed via `requirements.txt`; the `package.json` only wraps uvicorn for Turborepo. Run `pnpm --filter ai setup` once to install Python deps. See `apps/ai/AGENTS.md`.
 
 ### Shared packages
 
@@ -46,11 +46,13 @@ Packages build bottom-up; Turbo orders tasks via `^build`. Shared packages expor
 
 ```
 frontend (5173) ── REST + SSE + XHR upload ──▶ backend (3000, /api)
-backend ── HTTP NDJSON ──▶ ai service (8000)
+backend ── HTTP NDJSON (path or multipart) ──▶ ai service (8000)
 backend ⇄ storage/uploads, storage/results (disk, gitignored)
 ```
 
-- The backend sends the AI service **absolute filesystem paths** (`inputPath`, `outputPath`). Both services must run on the same machine or share a volume.
+- The backend→AI transport is selected by `AI_TRANSFER_MODE` (see `apps/backend/AGENTS.md`):
+  - **`path`** (default, local/dev): the backend sends **absolute filesystem paths** (`inputPath`, `outputPath`) to `/process`. Both services must run on the same machine or share a volume.
+  - **`remote`** (two-server deployment, no shared storage): the backend uploads the video to `/process-upload` and downloads the result from `/result/:jobId`. Designed for an app server (frontend + backend + storage) and a separate GPU server running the AI service. The two communicate over an internal network with a bearer token (`AI_INTERNAL_TOKEN`); the frontend never talks to the GPU server directly.
 - Job state lives in an in-memory `Map` in `UploadService` — it does not survive a backend restart, and there is no cleanup of old jobs or files (known limitations).
 
 ## Job lifecycle
@@ -58,12 +60,12 @@ backend ⇄ storage/uploads, storage/results (disk, gitignored)
 States (`@repo/schemas/jobs`): `queued → processing → completed | failed | cancelled`. Terminal states are **sticky** — `updateJob` ignores further updates once a job is terminal.
 
 1. `POST /api/upload` (multipart field `video`) → Multer writes `storage/uploads/{uuid}{ext}`, job created as `queued`, processing starts fire-and-forget, `{ jobId }` returned immediately.
-2. Backend checks AI `GET /health` (requires `model_loaded: true`), then `POST /process` with `{ jobId, inputPath, outputPath, scale: 4 }` and consumes the NDJSON progress stream, pushing each update to the per-job SSE stream (`/api/upload/events/:jobId`).
-3. On the AI's `completed` line the backend verifies the output file exists at `storage/results/{jobId}_enhanced{ext}` and marks the job `completed`.
+2. Backend checks AI `GET /health` (requires `model_loaded: true`), then hands off work per `AI_TRANSFER_MODE`: in `path` mode `POST /process` with `{ jobId, inputPath, outputPath, scale: 4 }`; in `remote` mode `POST /process-upload` with the `video` file (multipart). Either way it consumes the NDJSON progress stream and pushes each update to the per-job SSE stream (`/api/upload/events/:jobId`).
+3. On the AI's `completed` line: in `path` mode the backend verifies the output file the AI wrote; in `remote` mode it first downloads `GET /result/:jobId` from the AI and saves it locally. Either way the local result is at `storage/results/{jobId}_enhanced{ext}` and the job is marked `completed`.
 4. Cancel (`POST /api/upload/cancel/:jobId`): backend marks the job `cancelled` in memory first, aborts the in-flight fetch, then calls AI `POST /cancel` (404 from the AI is tolerated). The AI deletes its partial output.
 5. `GET /api/upload/result/:jobId` (completed only) returns metadata; `GET /api/upload/stream/:jobId` streams the video with HTTP Range support.
 
-NDJSON message shapes are documented in `apps/ai/AGENTS.md` and implemented in `apps/backend/src/upload/processing.service.ts` + `apps/ai/server.py`. There is **no shared Zod schema** for this internal protocol — changing it requires updating both files (and the docs).
+NDJSON message shapes are documented in `apps/ai/AGENTS.md`, typed in `apps/backend/src/upload/ai-protocol.types.ts`, and implemented in `apps/backend/src/upload/ai-client.service.ts` + `apps/ai/server.py`. There is **no shared Zod schema** for this internal protocol — changing it requires updating both sides (and the docs). Internal AI endpoints `/process-upload`, `/result/:jobId`, and `/cancel` require `Authorization: Bearer <AI_INTERNAL_TOKEN>` when that secret is set.
 
 ## Integration pattern
 
@@ -109,5 +111,5 @@ The AI app defines `dev`, `preview`, `start:prod`, and `setup` — Turbo skips i
 - Use app-local `@/` alias for imports from `src/*` in frontend and backend.
 - Import order: external libs → `@repo/*` packages → `@/` aliases → relative imports.
 - Kebab-case filenames; no barrel files — packages use `package.json` exports maps.
-- Look up library docs via Context7 MCP before writing framework-specific code.
+- Look up library docs via Context7 MCP (and Tavily MCP for current web research when Context7 is insufficient) before writing framework-specific code — e.g. NestJS, FastAPI, Node `fetch`/`FormData`/streams, Vite.
 - Verify with `pnpm lint && pnpm check-types && pnpm build` before claiming work is complete.

@@ -8,6 +8,7 @@ import * as path from 'node:path';
 import { UploadController } from '@/upload/upload.controller';
 import { UploadService } from '@/upload/upload.service';
 import { ProcessingService } from '@/upload/processing.service';
+import { AiClientService } from '@/upload/ai-client.service';
 import type { Env } from '@/utils/env.validation';
 
 @Module({
@@ -58,6 +59,6 @@ import type { Env } from '@/utils/env.validation';
     })
   ],
   controllers: [UploadController],
-  providers: [UploadService, ProcessingService]
+  providers: [UploadService, ProcessingService, AiClientService]
 })
 export class UploadModule {}
