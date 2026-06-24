@@ -7,9 +7,10 @@ Two backend transports are supported:
                       later downloads the result from ``/result/{jobId}``
                       (two-server deployments with no shared storage).
 
-Internal mutating/result endpoints (``/process-upload``, ``/result``,
+All mutating/result endpoints (``/process``, ``/process-upload``, ``/result``,
 ``/cancel``) require ``Authorization: Bearer <AI_INTERNAL_TOKEN>`` when that
-env var is set. ``/health`` and ``/process`` stay unauthenticated.
+env var is set (a no-op for local dev when it is empty). Only ``/health`` stays
+unauthenticated.
 """
 
 import asyncio
