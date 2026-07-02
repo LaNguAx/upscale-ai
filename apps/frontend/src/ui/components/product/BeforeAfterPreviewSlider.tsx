@@ -77,6 +77,9 @@ export function BeforeAfterPreviewSlider({
           draggingRef.current = false;
           e.currentTarget.releasePointerCapture(e.pointerId);
         }}
+        onPointerCancel={() => {
+          draggingRef.current = false;
+        }}
       >
         <video
           ref={videoRef}
