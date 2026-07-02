@@ -18,6 +18,8 @@ If you change behavior, structure, endpoints, env vars, schemas, commands, or wo
 | backend  | `RESULT_DIR`               | `../../storage/results`            | Zod-validated, resolved from `apps/backend`        |
 | backend  | `MAX_FILE_SIZE_MB`         | `500`                              | Zod-validated                                      |
 | backend  | `ALLOWED_VIDEO_EXTENSIONS` | `.mp4,.avi,...`                    | Zod-validated                                      |
+| backend  | `PREVIEW_ENABLED`          | `true`                             | Zod-validated (`z.stringbool()`)                   |
+| backend  | `PREVIEW_DIR`              | `../../storage/previews`           | Zod-validated, resolved from `apps/backend`        |
 | frontend | `VITE_PORT`                | `5173`                             | Read in `vite.config.ts`                           |
 | frontend | `VITE_API_BASE_URL`        | `http://localhost:3000`            | Backend origin (no `/api` suffix), `config/api.ts` |
 | ai       | `CHECKPOINT_PATH`          | `./checkpoints/vsr_model_best.pth` | Read in `server.py`                                |
@@ -27,6 +29,11 @@ If you change behavior, structure, endpoints, env vars, schemas, commands, or wo
 | ai       | `WORK_UPLOAD_DIR`          | `../../storage/ai/uploads`         | Read in `server.py` (remote-mode uploads)          |
 | ai       | `WORK_RESULT_DIR`          | `../../storage/ai/results`         | Read in `server.py` (remote-mode results)          |
 | ai       | `HOST` / `PORT`            | `0.0.0.0` / `8000`                 | Read in `server.py`                                |
+| ai       | `PREVIEW_ENABLED`          | `true`                             | Read in `server.py`                                |
+| ai       | `PREVIEW_EVERY_N_FRAMES`   | `15`                               | Read in `server.py`                                |
+| ai       | `PREVIEW_MAX_WIDTH`        | `640`                              | Read in `server.py`                                |
+| ai       | `PREVIEW_JPEG_QUALITY`     | `80`                               | Read in `server.py`                                |
+| ai       | `WORK_PREVIEW_DIR`         | `../../storage/ai/previews`        | Read in `server.py` (preview frames)               |
 
 ## Verification
 

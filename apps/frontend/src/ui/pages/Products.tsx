@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { ZoomIn, RotateCcw } from 'lucide-react';
 import { PageContainer } from '@/ui/components/PageContainer';
 import { VideoUploadForm } from '@/ui/components/product/VideoUploadForm';
@@ -82,8 +82,26 @@ export function Products() {
   const [cancelJob] = useCancelJobMutation();
   const dispatch = useAppDispatch();
 
+  const [originalUrl, setOriginalUrl] = useState<string | null>(null);
+  const originalUrlRef = useRef<string | null>(null);
+
+  const replaceOriginalUrl = useCallback((file: File | null) => {
+    if (originalUrlRef.current) URL.revokeObjectURL(originalUrlRef.current);
+    const next = file ? URL.createObjectURL(file) : null;
+    originalUrlRef.current = next;
+    setOriginalUrl(next);
+  }, []);
+
+  useEffect(
+    () => () => {
+      if (originalUrlRef.current) URL.revokeObjectURL(originalUrlRef.current);
+    },
+    []
+  );
+
   const handleUpload = useCallback(
     async (file: File) => {
+      replaceOriginalUrl(file);
       setPageState('uploading');
       setUploadProgress(0);
       setUploadError(null);
@@ -115,7 +133,7 @@ export function Products() {
         setPageState('idle');
       }
     },
-    [uploadVideo, dispatch]
+    [uploadVideo, dispatch, replaceOriginalUrl]
   );
 
   const handleReset = useCallback(() => {
@@ -125,7 +143,8 @@ export function Products() {
     setUploadError(null);
     setProcessingError(null);
     setIsStopping(false);
-  }, []);
+    replaceOriginalUrl(null);
+  }, [replaceOriginalUrl]);
 
   const handleStopUpscaling = useCallback(async () => {
     if (!jobId) return;
@@ -175,6 +194,7 @@ export function Products() {
         {pageState === 'processing' && jobId && (
           <JobStatusPanel
             jobId={jobId}
+            originalSrc={originalUrl}
             onCompleted={() => {
               setPageState('completed');
             }}

@@ -32,7 +32,14 @@ const envSchema = z.object({
   RESULT_DIR: z.string().default('../../storage/results'),
   MAX_FILE_SIZE_MB: z.coerce.number().int().positive().default(500),
   /** Comma-separated list of allowed upload extensions (with leading dots). */
-  ALLOWED_VIDEO_EXTENSIONS: z.string().default('.mp4,.avi,.mkv,.mov,.wmv,.webm')
+  ALLOWED_VIDEO_EXTENSIONS: z.string().default('.mp4,.avi,.mkv,.mov,.wmv,.webm'),
+  /**
+   * Master switch for caching/serving AI preview frames. Accepts
+   * true/false-style strings ("true", "false", "1", "0", "yes", "no", ...).
+   */
+  PREVIEW_ENABLED: z.stringbool().default(true),
+  /** Local cache of AI preview frames, resolved from the backend working dir. */
+  PREVIEW_DIR: z.string().default('../../storage/previews')
 });
 
 export type Env = z.infer<typeof envSchema>;

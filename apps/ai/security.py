@@ -19,6 +19,32 @@ def is_valid_job_id(job_id: str) -> bool:
     return bool(JOB_ID_PATTERN.fullmatch(job_id))
 
 
+FRAME_INDEX_PATTERN = re.compile(r"^\d{1,9}$")
+LATEST_FRAME_KEY = "latest"
+
+
+def is_valid_frame_index(frame_key: str) -> bool:
+    """True only for plain decimal frame indexes (no signs, dots, or paths)."""
+    return bool(FRAME_INDEX_PATTERN.fullmatch(frame_key))
+
+
+def resolve_preview_path(preview_dir: Path, job_id: str, frame_key: str) -> Path | None:
+    """Return the absolute path of a preview JPEG, or ``None`` if unsafe.
+
+    ``frame_key`` is either ``"latest"`` or a decimal frame index. The result
+    is guaranteed to stay inside ``preview_dir`` — callers never supply paths.
+    """
+    if not is_valid_job_id(job_id):
+        return None
+    if frame_key != LATEST_FRAME_KEY and not is_valid_frame_index(frame_key):
+        return None
+    base = preview_dir.resolve()
+    candidate = (base / job_id / f"{frame_key}.jpg").resolve()
+    if base not in candidate.parents:
+        return None
+    return candidate
+
+
 def safe_extension(filename: str | None) -> str:
     """Return an allow-listed extension for an uploaded file (defaults to .mp4)."""
     ext = Path(filename or "").suffix.lower()

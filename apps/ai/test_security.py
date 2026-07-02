@@ -4,7 +4,15 @@ These import only ``security`` (no torch / FastAPI / GPU), so they run fast in
 any environment. Run with ``pytest`` or directly: ``python test_security.py``.
 """
 
-from security import is_valid_job_id, safe_extension, token_matches
+from pathlib import Path
+
+from security import (
+    is_valid_frame_index,
+    is_valid_job_id,
+    resolve_preview_path,
+    safe_extension,
+    token_matches,
+)
 
 
 def test_valid_job_id_accepts_uuid_like():
@@ -38,6 +46,43 @@ def test_token_matches():
     assert token_matches("Bearer wrong", "secret") is False
     assert token_matches(None, "secret") is False
     assert token_matches("Basic secret", "secret") is False
+
+
+def test_valid_frame_index():
+    assert is_valid_frame_index("1")
+    assert is_valid_frame_index("0")
+    assert is_valid_frame_index("999999999")
+
+
+def test_invalid_frame_index():
+    assert not is_valid_frame_index("")
+    assert not is_valid_frame_index("-1")
+    assert not is_valid_frame_index("1.5")
+    assert not is_valid_frame_index("1" * 10)
+    assert not is_valid_frame_index("latest")
+    assert not is_valid_frame_index("../1")
+
+
+def test_resolve_preview_path_valid_frame():
+    base = Path("previews")
+    resolved = resolve_preview_path(base, "job-1", "42")
+    assert resolved == (base / "job-1" / "42.jpg").resolve()
+
+
+def test_resolve_preview_path_latest():
+    base = Path("previews")
+    resolved = resolve_preview_path(base, "job-1", "latest")
+    assert resolved == (base / "job-1" / "latest.jpg").resolve()
+
+
+def test_resolve_preview_path_rejects_unsafe_input():
+    base = Path("previews")
+    assert resolve_preview_path(base, "../evil", "1") is None
+    assert resolve_preview_path(base, "a/b", "latest") is None
+    assert resolve_preview_path(base, "a.b", "latest") is None
+    assert resolve_preview_path(base, "job-1", "..") is None
+    assert resolve_preview_path(base, "job-1", "1/2") is None
+    assert resolve_preview_path(base, "job-1", "") is None
 
 
 if __name__ == "__main__":

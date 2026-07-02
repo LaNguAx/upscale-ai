@@ -20,12 +20,12 @@ Stale docs are treated as bugs. Per-app `CLAUDE.md` files are one-line `@AGENTS.
 
 - `apps/frontend` — Vite 8 + React 19 SPA (port 5173 via `VITE_PORT`). Tailwind v4, shadcn/ui, Redux Toolkit + RTK Query, React Router 7. See `apps/frontend/AGENTS.md`.
 - `apps/backend` — NestJS 11 API under `/api` prefix (port 3000 via `PORT`, Swagger UI at `/docs` in dev). Multer disk uploads, SSE job updates, HTTP Range streaming. Bridges to the AI service over HTTP NDJSON in either `path` or `remote` transport mode (`AI_TRANSFER_MODE`). See `apps/backend/AGENTS.md`.
-- `apps/ai` — Python FastAPI + PyTorch BasicVSR/SPyNet inference service (port 8000). Exposes `/health`, path-based `/process`, multipart `/process-upload`, `/result/:jobId`, and `/cancel` (token-guarded internal endpoints). Managed via `requirements.txt`; the `package.json` only wraps uvicorn for Turborepo. Run `pnpm --filter ai setup` once to install Python deps. See `apps/ai/AGENTS.md`.
+- `apps/ai` — Python FastAPI + PyTorch BasicVSR/SPyNet inference service (port 8000). Exposes `/health`, path-based `/process`, multipart `/process-upload`, `/result/:jobId`, `/cancel`, and `/preview/:jobId/latest` + `/preview/:jobId/:frameIndex` (token-guarded internal endpoints). Managed via `requirements.txt`; the `package.json` only wraps uvicorn for Turborepo. Run `pnpm --filter ai run setup` once (the explicit `run` matters — pnpm 10 otherwise invokes its builtin `setup` command) to install Python deps. See `apps/ai/AGENTS.md`.
 
 ### Shared packages
 
 - `@repo/consts` — endpoint path strings (`/api/health`, `/api/upload`, status/result/cancel/stream/events) and app constants. Leaf package.
-- `@repo/schemas` — Zod 4 schemas and inferred types. Subpaths: `/health`, `/jobs` (`JobState`, `JobStatus`, `JobUpdate`, `isTerminalJobState`), `/upload` (`UploadResponse`, `JobResult`, `CancelJobResponse`), `/errors` (RFC 7807 `problemDetailsSchema`).
+- `@repo/schemas` — Zod 4 schemas and inferred types. Subpaths: `/health`, `/jobs` (`JobState`, `JobStatus`, `JobUpdate`, `isTerminalJobState`, `jobPreviewSchema`), `/upload` (`UploadResponse`, `JobResult`, `CancelJobResponse`), `/errors` (RFC 7807 `problemDetailsSchema`).
 - `@repo/contracts` — typed `EndpointContract<TResponse, TBody, TParams, TQuery>` objects combining consts + schemas. The binary stream and SSE endpoints are path-only (documented in `upload.contracts.ts`).
 - `@repo/eslint-config` — ESLint 9 flat configs: `base`, `node`, `react-internal`.
 - `@repo/typescript-config` — TS presets: `base.json`, `node.json`, `vite.json` (plus `nextjs.json`/`react-library.json` kept for parity with the upstream starter).
@@ -47,25 +47,27 @@ Packages build bottom-up; Turbo orders tasks via `^build`. Shared packages expor
 ```
 frontend (5173) ── REST + SSE + XHR upload ──▶ backend (3000, /api)
 backend ── HTTP NDJSON (path or multipart) ──▶ ai service (8000)
-backend ⇄ storage/uploads, storage/results (disk, gitignored)
+backend ── HTTP preview JPEG downloads ──▶ ai service (8000)
+backend ⇄ storage/uploads, storage/results, storage/previews (disk, gitignored)
 ```
 
 - The backend→AI transport is selected by `AI_TRANSFER_MODE` (see `apps/backend/AGENTS.md`):
   - **`path`** (default, local/dev): the backend sends **absolute filesystem paths** (`inputPath`, `outputPath`) to `/process`. Both services must run on the same machine or share a volume.
   - **`remote`** (two-server deployment, no shared storage): the backend uploads the video to `/process-upload` and downloads the result from `/result/:jobId`. Designed for an app server (frontend + backend + storage) and a separate GPU server running the AI service. The two communicate over an internal network with a bearer token (`AI_INTERNAL_TOKEN`); the frontend never talks to the GPU server directly.
-- Job state lives in an in-memory `Map` in `UploadService` — it does not survive a backend restart, and there is no cleanup of old jobs or files (known limitations).
+  - Progressive preview frames are pulled by the backend over HTTP from the AI's `/preview/:jobId/...` endpoints in **both** transports (there is no filesystem shortcut, even in `path` mode) — the frontend only ever sees the backend's own `/api/upload/preview/...` URLs, never the AI service's address.
+- Job state lives in an in-memory `Map` in `UploadService` — it does not survive a backend restart, and there is no cleanup of old jobs or files, including cached preview frames under `storage/previews` (known limitations).
 
 ## Job lifecycle
 
 States (`@repo/schemas/jobs`): `queued → processing → completed | failed | cancelled`. Terminal states are **sticky** — `updateJob` ignores further updates once a job is terminal.
 
 1. `POST /api/upload` (multipart field `video`) → Multer writes `storage/uploads/{uuid}{ext}`, job created as `queued`, processing starts fire-and-forget, `{ jobId }` returned immediately.
-2. Backend checks AI `GET /health` (requires `model_loaded: true`), then hands off work per `AI_TRANSFER_MODE`: in `path` mode `POST /process` with `{ jobId, inputPath, outputPath, scale: 4 }`; in `remote` mode `POST /process-upload` with the `video` file (multipart). Either way it consumes the NDJSON progress stream and pushes each update to the per-job SSE stream (`/api/upload/events/:jobId`).
-3. On the AI's `completed` line: in `path` mode the backend verifies the output file the AI wrote; in `remote` mode it first downloads `GET /result/:jobId` from the AI and saves it locally. Either way the local result is at `storage/results/{jobId}_enhanced{ext}` and the job is marked `completed`.
-4. Cancel (`POST /api/upload/cancel/:jobId`): backend marks the job `cancelled` in memory first, aborts the in-flight fetch, then calls AI `POST /cancel` (404 from the AI is tolerated). The AI deletes its partial output.
-5. `GET /api/upload/result/:jobId` (completed only) returns metadata; `GET /api/upload/stream/:jobId` streams the video with HTTP Range support.
+2. Backend checks AI `GET /health` (requires `model_loaded: true`), then hands off work per `AI_TRANSFER_MODE`: in `path` mode `POST /process` with `{ jobId, inputPath, outputPath, scale: 4 }`; in `remote` mode `POST /process-upload` with the `video` file (multipart). Either way it consumes the NDJSON progress stream and pushes each update to the per-job SSE stream (`/api/upload/events/:jobId`). Along the way, sampled enhanced preview JPEGs are written on the AI (frame 1, then every `PREVIEW_EVERY_N_FRAMES`th frame) and referenced on `processing` lines; the backend downloads each one, fire-and-forget, to `PREVIEW_DIR/{jobId}/`, and surfaces it as an optional `preview` object (`jobPreviewSchema`, with a public `/api/upload/preview/:jobId/:frameIndex` URL) on `JobUpdate`/`JobStatus`. A preview download failure is logged and never fails the job.
+3. On the AI's `completed` line: in `path` mode the backend verifies the output file the AI wrote; in `remote` mode it first downloads `GET /result/:jobId` from the AI and saves it locally. Either way the local result is at `storage/results/{jobId}_enhanced{ext}` and the job is marked `completed`. The final enhanced video only ever becomes available at this point — progressive previews are still-frame snapshots during processing, not a live video stream, and never substitute for the completed result.
+4. Cancel (`POST /api/upload/cancel/:jobId`): backend marks the job `cancelled` in memory first, aborts the in-flight fetch, then calls AI `POST /cancel` (404 from the AI is tolerated). The AI deletes its partial output, including its cached preview frames for that job.
+5. `GET /api/upload/result/:jobId` (completed only) returns metadata; `GET /api/upload/stream/:jobId` streams the video with HTTP Range support; `GET /api/upload/preview/:jobId/latest` (`Cache-Control: no-store`) and `GET /api/upload/preview/:jobId/:frameIndex` (public, `max-age=31536000, immutable`) serve cached preview JPEGs for known jobs (404 otherwise).
 
-NDJSON message shapes are documented in `apps/ai/AGENTS.md`, typed in `apps/backend/src/upload/ai-protocol.types.ts`, and implemented in `apps/backend/src/upload/ai-client.service.ts` + `apps/ai/server.py`. There is **no shared Zod schema** for this internal protocol — changing it requires updating both sides (and the docs). Internal AI endpoints `/process-upload`, `/result/:jobId`, and `/cancel` require `Authorization: Bearer <AI_INTERNAL_TOKEN>` when that secret is set.
+NDJSON message shapes are documented in `apps/ai/AGENTS.md`, typed in `apps/backend/src/upload/ai-protocol.types.ts`, and implemented in `apps/backend/src/upload/ai-client.service.ts` + `apps/ai/server.py`. There is **no shared Zod schema** for this internal protocol — changing it requires updating both sides (and the docs). Internal AI endpoints `/process-upload`, `/result/:jobId`, `/cancel`, and `/preview/:jobId/...` require `Authorization: Bearer <AI_INTERNAL_TOKEN>` when that secret is set.
 
 ## Integration pattern
 

@@ -1,5 +1,10 @@
 import { createZodDto } from 'nestjs-zod';
-import { jobIdParamsSchema, jobStatusSchema } from '@repo/schemas/jobs';
+import {
+  jobIdParamsSchema,
+  jobStatusSchema,
+  previewFrameParamsSchema,
+  previewLatestParamsSchema
+} from '@repo/schemas/jobs';
 import {
   cancelJobResponseSchema,
   jobResultSchema,
@@ -17,3 +22,11 @@ export class CancelJobResponseDto extends createZodDto(
 ) {}
 
 export class JobIdParamsDto extends createZodDto(jobIdParamsSchema) {}
+
+export class PreviewLatestParamsDto extends createZodDto(
+  previewLatestParamsSchema
+) {}
+
+export class PreviewFrameParamsDto extends createZodDto(
+  previewFrameParamsSchema
+) {}

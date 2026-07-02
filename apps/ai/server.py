@@ -18,17 +18,26 @@ import json
 import logging
 import os
 import queue
+import shutil
 import threading
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+import cv2
+import numpy as np
 import torch
 from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, UploadFile
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 
 from baseline import VSRInferenceEngine, SEQ_LEN, SCALE, InferenceCancelledError
-from security import is_valid_job_id, safe_extension, token_matches
+from security import (
+    LATEST_FRAME_KEY,
+    is_valid_job_id,
+    resolve_preview_path,
+    safe_extension,
+    token_matches,
+)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -65,6 +74,22 @@ WORK_RESULT_DIR = _resolve_work_dir(
 )
 WORK_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 WORK_RESULT_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def _env_flag(name: str, default: str = "true") -> bool:
+    """Parse a boolean-ish env var ("false"/"0"/"no"/"off" disable)."""
+    return os.environ.get(name, default).strip().lower() not in {"0", "false", "no", "off"}
+
+
+# Progressive preview generation (sampled enhanced JPEG frames during inference).
+PREVIEW_ENABLED = _env_flag("PREVIEW_ENABLED")
+PREVIEW_EVERY_N_FRAMES = max(1, int(os.environ.get("PREVIEW_EVERY_N_FRAMES", "15")))
+PREVIEW_MAX_WIDTH = int(os.environ.get("PREVIEW_MAX_WIDTH", "640"))
+PREVIEW_JPEG_QUALITY = int(os.environ.get("PREVIEW_JPEG_QUALITY", "80"))
+WORK_PREVIEW_DIR = _resolve_work_dir(
+    os.environ.get("WORK_PREVIEW_DIR", "../../storage/ai/previews")
+)
+WORK_PREVIEW_DIR.mkdir(parents=True, exist_ok=True)
 
 # --- Global model state ---
 engine: VSRInferenceEngine | None = None
@@ -142,6 +167,37 @@ def _ensure_model_ready() -> None:
 # --- Inference streaming (shared by /process and /process-upload) ---
 
 
+def _write_preview_files(
+    job_id: str, frame_index: int, frame_bgr: np.ndarray
+) -> tuple[int, int] | None:
+    """Write ``{frameIndex}.jpg`` and ``latest.jpg`` atomically.
+
+    Downscales to ``PREVIEW_MAX_WIDTH`` (aspect preserved, never upscales) and
+    returns the written (width, height), or ``None`` if encoding failed.
+    """
+    height, width = frame_bgr.shape[:2]
+    if width > PREVIEW_MAX_WIDTH:
+        scale = PREVIEW_MAX_WIDTH / width
+        width = PREVIEW_MAX_WIDTH
+        height = max(1, round(height * scale))
+        frame_bgr = cv2.resize(frame_bgr, (width, height), interpolation=cv2.INTER_AREA)
+
+    ok, encoded = cv2.imencode(
+        ".jpg", frame_bgr, [cv2.IMWRITE_JPEG_QUALITY, PREVIEW_JPEG_QUALITY]
+    )
+    if not ok:
+        return None
+
+    job_dir = WORK_PREVIEW_DIR / job_id
+    job_dir.mkdir(parents=True, exist_ok=True)
+    data = encoded.tobytes()
+    for name in (f"{frame_index}.jpg", f"{LATEST_FRAME_KEY}.jpg"):
+        tmp_path = job_dir / f".{name}.tmp"
+        tmp_path.write_bytes(data)
+        os.replace(tmp_path, job_dir / name)
+    return width, height
+
+
 def run_inference_stream(
     job_id: str,
     input_path: str,
@@ -175,6 +231,33 @@ def run_inference_stream(
             })
             progress_queue.put(line)
 
+    preview_active = PREVIEW_ENABLED and is_valid_job_id(job_id)
+
+    def preview_callback(current_frame: int, total_frames: int, frame_bgr: np.ndarray) -> None:
+        if current_frame != 1 and current_frame % PREVIEW_EVERY_N_FRAMES != 0:
+            return
+        try:
+            size = _write_preview_files(job_id, current_frame, frame_bgr)
+            if size is None:
+                return
+            width, height = size
+            progress_queue.put(json.dumps({
+                "status": "processing",
+                "progress": max(last_percent[0], 0),
+                "currentFrame": current_frame,
+                "totalFrames": total_frames,
+                "preview": {
+                    "frameIndex": current_frame,
+                    "width": width,
+                    "height": height,
+                    "downloadUrl": f"/preview/{job_id}/{current_frame}",
+                },
+            }))
+        except Exception as e:  # previews must never fail inference
+            logger.warning(
+                f"Preview generation failed for job {job_id} frame {current_frame}: {e}"
+            )
+
     def inference_thread() -> None:
         try:
             result = engine.process_video(
@@ -183,6 +266,7 @@ def run_inference_stream(
                 max_height=MAX_INPUT_HEIGHT,
                 progress_callback=progress_callback,
                 should_cancel=cancel_event.is_set,
+                preview_callback=preview_callback if preview_active else None,
             )
             file_size = os.path.getsize(output_path) if os.path.exists(output_path) else 0
             completed: dict[str, object] = {
@@ -198,6 +282,8 @@ def run_inference_stream(
         except InferenceCancelledError:
             if os.path.exists(output_path):
                 os.remove(output_path)
+            if preview_active:
+                shutil.rmtree(WORK_PREVIEW_DIR / job_id, ignore_errors=True)
             cancelled_line = json.dumps({
                 "status": "cancelled",
                 "jobId": job_id,
@@ -319,6 +405,26 @@ def get_result(job_id: str):
         media_type="application/octet-stream",
         filename=result_path.name,
     )
+
+
+def _serve_preview(job_id: str, frame_key: str) -> FileResponse:
+    """Serve one preview JPEG from ``WORK_PREVIEW_DIR``; no path input accepted."""
+    preview_path = resolve_preview_path(WORK_PREVIEW_DIR, job_id, frame_key)
+    if preview_path is None:
+        raise HTTPException(status_code=400, detail="Invalid preview request")
+    if not preview_path.exists():
+        raise HTTPException(status_code=404, detail="Preview not found")
+    return FileResponse(path=str(preview_path), media_type="image/jpeg")
+
+
+@app.get("/preview/{job_id}/latest", dependencies=[Depends(require_token)])
+def get_preview_latest(job_id: str):
+    return _serve_preview(job_id, LATEST_FRAME_KEY)
+
+
+@app.get("/preview/{job_id}/{frame_index}", dependencies=[Depends(require_token)])
+def get_preview_frame(job_id: str, frame_index: str):
+    return _serve_preview(job_id, frame_index)
 
 
 if __name__ == "__main__":

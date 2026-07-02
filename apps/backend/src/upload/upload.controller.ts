@@ -27,11 +27,14 @@ import type {
 } from '@repo/schemas/upload';
 import { UploadService } from '@/upload/upload.service';
 import { ProcessingService } from '@/upload/processing.service';
+import { LATEST_FRAME_KEY } from '@/upload/preview-path.util';
 import {
   CancelJobResponseDto,
   JobIdParamsDto,
   JobResultDto,
   JobStatusDto,
+  PreviewFrameParamsDto,
+  PreviewLatestParamsDto,
   UploadResponseDto
 } from '@/upload/dto/upload.dto';
 
@@ -165,6 +168,41 @@ export class UploadController {
       'Content-Type': contentType
     });
 
+    return new StreamableFile(fs.createReadStream(filePath));
+  }
+
+  @Get('preview/:jobId/latest')
+  @ApiParam({ name: 'jobId', description: 'Job identifier' })
+  previewLatest(
+    @Param() params: PreviewLatestParamsDto,
+    @Res({ passthrough: true }) res: Response
+  ): StreamableFile {
+    const { filePath } = this.uploadService.getPreviewStreamInfo(
+      params.jobId,
+      LATEST_FRAME_KEY
+    );
+    res.set({
+      'Content-Type': 'image/jpeg',
+      'Cache-Control': 'no-store'
+    });
+    return new StreamableFile(fs.createReadStream(filePath));
+  }
+
+  @Get('preview/:jobId/:frameIndex')
+  @ApiParam({ name: 'jobId', description: 'Job identifier' })
+  @ApiParam({ name: 'frameIndex', description: 'Sampled preview frame index' })
+  previewFrame(
+    @Param() params: PreviewFrameParamsDto,
+    @Res({ passthrough: true }) res: Response
+  ): StreamableFile {
+    const { filePath } = this.uploadService.getPreviewStreamInfo(
+      params.jobId,
+      params.frameIndex
+    );
+    res.set({
+      'Content-Type': 'image/jpeg',
+      'Cache-Control': 'public, max-age=31536000, immutable'
+    });
     return new StreamableFile(fs.createReadStream(filePath));
   }
 }

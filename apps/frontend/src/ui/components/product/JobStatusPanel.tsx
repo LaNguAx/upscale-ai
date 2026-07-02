@@ -14,14 +14,20 @@ import {
   Clock,
   CircleStop
 } from 'lucide-react';
-import { UPLOAD_EVENTS_ENDPOINT } from '@repo/consts/upload';
+import {
+  UPLOAD_EVENTS_ENDPOINT,
+  UPLOAD_PREVIEW_FRAME_ENDPOINT,
+  UPLOAD_STREAM_ENDPOINT
+} from '@repo/consts/upload';
 import { getJobStatusContract } from '@repo/contracts/upload';
 import { jobUpdateSchema } from '@repo/schemas/jobs';
-import type { JobState, JobUpdate } from '@repo/schemas/jobs';
+import type { JobPreview, JobState, JobUpdate } from '@repo/schemas/jobs';
 import { buildApiUrl } from '@/config/api';
+import { BeforeAfterPreviewSlider } from '@/ui/components/product/BeforeAfterPreviewSlider';
 
 interface JobStatusPanelProps {
   jobId: string;
+  originalSrc: string | null;
   onCompleted: () => void;
   onCancelled: (reason?: string) => void;
   onFailed: (reason?: string) => void;
@@ -44,8 +50,19 @@ const STATUS_CONFIG: Record<
   cancelled: { label: 'Cancelled', variant: 'outline', icon: CircleStop }
 };
 
+/** Keep the freshest frame: a slow in-flight poll can resolve after a newer SSE update. */
+function pickNewerPreview(
+  current: JobPreview | null,
+  incoming: JobPreview
+): JobPreview {
+  return current && current.frameIndex > incoming.frameIndex
+    ? current
+    : incoming;
+}
+
 export function JobStatusPanel({
   jobId,
+  originalSrc,
   onCompleted,
   onCancelled,
   onFailed,
@@ -53,6 +70,7 @@ export function JobStatusPanel({
   isStopping
 }: JobStatusPanelProps) {
   const [status, setStatus] = useState<JobUpdate | null>(null);
+  const [preview, setPreview] = useState<JobPreview | null>(null);
   const onCompletedRef = useRef(onCompleted);
   const onCancelledRef = useRef(onCancelled);
   const onFailedRef = useRef(onFailed);
@@ -127,6 +145,10 @@ export function JobStatusPanel({
             await response.json()
           );
           setStatus(data);
+          if (data.preview) {
+            const incoming = data.preview;
+            setPreview((current) => pickNewerPreview(current, incoming));
+          }
 
           if (
             data.state === 'completed' ||
@@ -162,6 +184,10 @@ export function JobStatusPanel({
       }
 
       setStatus(data);
+      if (data.preview) {
+        const incoming = data.preview;
+        setPreview((current) => pickNewerPreview(current, incoming));
+      }
 
       if (
         data.state === 'completed' ||
@@ -228,6 +254,25 @@ export function JobStatusPanel({
           </div>
           <Progress value={status.progress} />
         </div>
+
+        {status.state === 'processing' &&
+          (preview ? (
+            <BeforeAfterPreviewSlider
+              originalSrc={
+                originalSrc ?? buildApiUrl(UPLOAD_STREAM_ENDPOINT, { jobId })
+              }
+              previewImageUrl={buildApiUrl(UPLOAD_PREVIEW_FRAME_ENDPOINT, {
+                jobId,
+                frameIndex: String(preview.frameIndex)
+              })}
+              frameIndex={preview.frameIndex}
+              progress={status.progress}
+            />
+          ) : (
+            <div className="flex aspect-video w-full items-center justify-center rounded-lg border border-dashed border-border bg-muted/30 text-sm text-muted-foreground">
+              Preparing first enhanced preview…
+            </div>
+          ))}
 
         <Button
           variant="destructive"
