@@ -12,6 +12,7 @@ import type {
   AIProcessUpdate,
   AITransferMode
 } from '@/upload/ai-protocol.types';
+import { resolveAiPreviewUrl } from '@/upload/preview-url.util';
 
 interface StreamProcessArgs {
   jobId: string;
@@ -21,6 +22,12 @@ interface StreamProcessArgs {
 }
 
 interface DownloadResultArgs {
+  downloadPath: string;
+  destPath: string;
+  signal: AbortSignal;
+}
+
+interface DownloadPreviewArgs {
   downloadPath: string;
   destPath: string;
   signal: AbortSignal;
@@ -157,6 +164,38 @@ export class AiClientService {
     }
     if (!response.body) {
       throw new Error('AI result download returned no response body.');
+    }
+
+    await pipeline(
+      Readable.fromWeb(response.body as unknown as NodeWebReadableStream<Uint8Array>),
+      createWriteStream(args.destPath)
+    );
+  }
+
+  /** Downloads one preview JPEG from the AI service and writes it to disk. */
+  async downloadPreview(args: DownloadPreviewArgs): Promise<void> {
+    // Like result downloads, the path comes from the AI's NDJSON stream and
+    // is untrusted — resolve and validate before fetching.
+    const target = resolveAiPreviewUrl(this.aiServiceUrl, args.downloadPath);
+
+    let response: Response;
+    try {
+      response = await fetch(target, {
+        headers: this.authHeaders(),
+        signal: args.signal
+      });
+    } catch (error) {
+      if (isAbortError(error)) throw error;
+      throw new Error('Failed to download preview from AI service.');
+    }
+
+    if (!response.ok) {
+      throw new Error(
+        `AI preview download failed (${String(response.status)} ${response.statusText})`
+      );
+    }
+    if (!response.body) {
+      throw new Error('AI preview download returned no response body.');
     }
 
     await pipeline(

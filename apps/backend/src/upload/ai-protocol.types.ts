@@ -17,12 +17,22 @@ export interface AIHealthResponse {
   model_loaded?: boolean;
 }
 
+/** Preview frame metadata optionally attached to a `processing` line. */
+export interface AIPreviewUpdate {
+  frameIndex: number;
+  width?: number;
+  height?: number;
+  /** AI-relative download path, e.g. `/preview/{jobId}/{frameIndex}`. */
+  downloadUrl: string;
+}
+
 /** One NDJSON progress line emitted during inference (no `jobId`). */
 export interface AIProcessingUpdate {
   status: 'processing';
   progress: number;
   currentFrame?: number;
   totalFrames?: number;
+  preview?: AIPreviewUpdate;
 }
 
 /**
