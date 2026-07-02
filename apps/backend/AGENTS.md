@@ -23,7 +23,7 @@ NestJS 11 API on Express. Global prefix `/api`, port 3000 (`PORT`), Swagger at `
 - `src/middleware/request-id.middleware.ts` — `x-request-id`: echoes a safe incoming ID (`/^[A-Za-z0-9._-]{1,128}$/`) or generates a UUID; sets `req.id` and the response header.
 - `src/utils/env.validation.ts` — Zod schema for ALL env vars; startup fails on invalid env.
 - `src/consts/` — error titles, problem `type` URIs, HTTP status→title map used by the filter.
-- `test/app.e2e-spec.ts` — the only test suite (see Testing).
+- `test/app.e2e-spec.ts` + `test/preview.e2e-spec.ts` — e2e suites; unit specs live next to their sources in `src/` (see Testing).
 
 ## Endpoints
 
@@ -60,7 +60,7 @@ States: `queued → processing → completed | failed | cancelled`. Terminal sta
 `NODE_ENV` (`development`), `PORT` (`3000`), `CORS_ORIGIN` (`*` → allow all; otherwise comma-separated exact origins), `AI_SERVICE_URL` (`http://localhost:8000`), `AI_TRANSFER_MODE` (`path` | `remote`, default `path`), `AI_INTERNAL_TOKEN` (default empty), `UPLOAD_DIR` (`../../storage/uploads`), `RESULT_DIR` (`../../storage/results`), `MAX_FILE_SIZE_MB` (`500`), `ALLOWED_VIDEO_EXTENSIONS` (`.mp4,.avi,.mkv,.mov,.wmv,.webm`), `PREVIEW_ENABLED` (`z.stringbool()`, default `true` — master switch for caching/serving AI preview frames), `PREVIEW_DIR` (`../../storage/previews`). Dirs resolve from `process.cwd()` (normally `apps/backend`) and are created on startup. Examples in `.env.development.example` / `.env.production.example`.
 
 - `AI_TRANSFER_MODE` selects the backend→AI transport. `path` sends absolute filesystem paths to `/process` (backend and AI share a disk — local/dev). `remote` uploads the video to `/process-upload` and downloads the result, for two-server deployments (app server + GPU server) with **no shared storage**.
-- `AI_INTERNAL_TOKEN` is the shared secret for internal backend→AI calls. When non-empty, the backend sends `Authorization: Bearer <token>` to the AI's `/process-upload`, `/result`, and `/cancel` endpoints; it must match the AI service's `AI_INTERNAL_TOKEN`. Empty disables auth (local dev only). The token is never logged.
+- `AI_INTERNAL_TOKEN` is the shared secret for internal backend→AI calls. When non-empty, the backend sends `Authorization: Bearer <token>` to the AI's `/process-upload`, `/result`, `/cancel`, and `/preview/...` endpoints; it must match the AI service's `AI_INTERNAL_TOKEN`. Empty disables auth (local dev only). The token is never logged.
 
 ## Error handling
 
@@ -70,8 +70,8 @@ States: `queued → processing → completed | failed | cancelled`. Terminal sta
 
 ## Testing
 
-- `pnpm --filter backend test:e2e` — boots the **real** `AppModule` via `configureApp`. Covers health, 404 ProblemDetails, request-id echo/generation, Swagger availability (dev) / absence (prod, via stubbed ConfigService), helmet headers. **The AI service is not mocked and the upload/processing path is not exercised** — adding such tests requires stubbing `fetch` to `AI_SERVICE_URL`.
-- `pnpm --filter backend test` passes with no tests (none exist).
+- `pnpm --filter backend test:e2e` — boots the **real** `AppModule` via `configureApp`. `app.e2e-spec.ts` covers health, 404 ProblemDetails, request-id echo/generation, Swagger availability (dev) / absence (prod, via stubbed ConfigService), helmet headers; `preview.e2e-spec.ts` covers the preview endpoints' 404/400 validation paths. **The AI service is not mocked and the upload/processing path is not exercised** — adding such tests requires stubbing `fetch` to `AI_SERVICE_URL`.
+- `pnpm --filter backend test` — unit specs beside their sources: `env.validation.spec.ts`, `ai-client.service.spec.ts`, `preview-path.util.spec.ts`, `preview-url.util.spec.ts`, `upload.service.spec.ts`.
 
 ## Gotchas
 

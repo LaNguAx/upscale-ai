@@ -50,6 +50,16 @@ const STATUS_CONFIG: Record<
   cancelled: { label: 'Cancelled', variant: 'outline', icon: CircleStop }
 };
 
+/** Keep the freshest frame: a slow in-flight poll can resolve after a newer SSE update. */
+function pickNewerPreview(
+  current: JobPreview | null,
+  incoming: JobPreview
+): JobPreview {
+  return current && current.frameIndex > incoming.frameIndex
+    ? current
+    : incoming;
+}
+
 export function JobStatusPanel({
   jobId,
   originalSrc,
@@ -135,7 +145,10 @@ export function JobStatusPanel({
             await response.json()
           );
           setStatus(data);
-          if (data.preview) setPreview(data.preview);
+          if (data.preview) {
+            const incoming = data.preview;
+            setPreview((current) => pickNewerPreview(current, incoming));
+          }
 
           if (
             data.state === 'completed' ||
@@ -171,7 +184,10 @@ export function JobStatusPanel({
       }
 
       setStatus(data);
-      if (data.preview) setPreview(data.preview);
+      if (data.preview) {
+        const incoming = data.preview;
+        setPreview((current) => pickNewerPreview(current, incoming));
+      }
 
       if (
         data.state === 'completed' ||
