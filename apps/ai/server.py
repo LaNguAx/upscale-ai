@@ -407,6 +407,26 @@ def get_result(job_id: str):
     )
 
 
+def _serve_preview(job_id: str, frame_key: str) -> FileResponse:
+    """Serve one preview JPEG from ``WORK_PREVIEW_DIR``; no path input accepted."""
+    preview_path = resolve_preview_path(WORK_PREVIEW_DIR, job_id, frame_key)
+    if preview_path is None:
+        raise HTTPException(status_code=400, detail="Invalid preview request")
+    if not preview_path.exists():
+        raise HTTPException(status_code=404, detail="Preview not found")
+    return FileResponse(path=str(preview_path), media_type="image/jpeg")
+
+
+@app.get("/preview/{job_id}/latest", dependencies=[Depends(require_token)])
+def get_preview_latest(job_id: str):
+    return _serve_preview(job_id, LATEST_FRAME_KEY)
+
+
+@app.get("/preview/{job_id}/{frame_index}", dependencies=[Depends(require_token)])
+def get_preview_frame(job_id: str, frame_index: str):
+    return _serve_preview(job_id, frame_index)
+
+
 if __name__ == "__main__":
     import uvicorn
 
