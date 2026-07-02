@@ -11,12 +11,20 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import {
   isTerminalJobState,
+  type JobPreview,
   type JobState,
   type JobStatus,
   type JobUpdate
 } from '@repo/schemas/jobs';
 import type { JobResult, UploadResponse } from '@repo/schemas/upload';
 import type { Env } from '@/utils/env.validation';
+
+/** Internal preview metadata; the public imageUrl is derived on emission. */
+export interface JobPreviewMetadata {
+  frameIndex: number;
+  width?: number;
+  height?: number;
+}
 
 interface JobRecord {
   jobId: string;
@@ -29,6 +37,7 @@ interface JobRecord {
   createdAt: string;
   updatedAt: string;
   error?: string;
+  preview?: JobPreviewMetadata;
 }
 
 @Injectable()
@@ -37,6 +46,7 @@ export class UploadService {
   private readonly jobUpdates$ = new Subject<JobUpdate>();
   private readonly uploadDir: string;
   private readonly resultDir: string;
+  private readonly previewDir: string;
 
   constructor(private readonly configService: ConfigService<Env, true>) {
     this.uploadDir = path.resolve(
@@ -47,9 +57,14 @@ export class UploadService {
       process.cwd(),
       this.configService.get('RESULT_DIR', { infer: true })
     );
+    this.previewDir = path.resolve(
+      process.cwd(),
+      this.configService.get('PREVIEW_DIR', { infer: true })
+    );
 
     fs.mkdirSync(this.uploadDir, { recursive: true });
     fs.mkdirSync(this.resultDir, { recursive: true });
+    fs.mkdirSync(this.previewDir, { recursive: true });
   }
 
   createJob(file: Express.Multer.File): UploadResponse {
@@ -73,6 +88,27 @@ export class UploadService {
     return { jobId };
   }
 
+  private toJobPreview(job: JobRecord): JobPreview | undefined {
+    if (!job.preview) return undefined;
+    return {
+      frameIndex: job.preview.frameIndex,
+      imageUrl: `/api/upload/preview/${job.jobId}/${String(job.preview.frameIndex)}`,
+      width: job.preview.width,
+      height: job.preview.height
+    };
+  }
+
+  private toJobUpdate(job: JobRecord): JobUpdate {
+    return {
+      jobId: job.jobId,
+      state: job.state,
+      progress: job.progress,
+      updatedAt: job.updatedAt,
+      error: job.error,
+      preview: this.toJobPreview(job)
+    };
+  }
+
   updateJob(
     jobId: string,
     state: JobState,
@@ -89,13 +125,7 @@ export class UploadService {
     job.updatedAt = now;
     if (error !== undefined) job.error = error;
 
-    this.jobUpdates$.next({
-      jobId,
-      state,
-      progress,
-      updatedAt: now,
-      error
-    });
+    this.jobUpdates$.next(this.toJobUpdate(job));
   }
 
   getJobUpdates$(jobId: string): Observable<MessageEvent> {
@@ -104,13 +134,7 @@ export class UploadService {
       throw new NotFoundException(`Job ${jobId} not found`);
     }
 
-    const currentState: JobUpdate = {
-      jobId: job.jobId,
-      state: job.state,
-      progress: job.progress,
-      updatedAt: job.updatedAt,
-      error: job.error
-    };
+    const currentState: JobUpdate = this.toJobUpdate(job);
 
     return this.jobUpdates$.pipe(
       filter((u) => u.jobId === jobId),
@@ -132,7 +156,8 @@ export class UploadService {
       progress: job.progress,
       createdAt: job.createdAt,
       updatedAt: job.updatedAt,
-      error: job.error
+      error: job.error,
+      preview: this.toJobPreview(job)
     };
   }
 
@@ -179,6 +204,15 @@ export class UploadService {
     if (job && job.state === 'processing') {
       job.resultPath = resultPath;
     }
+  }
+
+  setJobPreview(jobId: string, preview: JobPreviewMetadata): void {
+    const job = this.jobs.get(jobId);
+    if (!job || isTerminalJobState(job.state)) return;
+
+    job.preview = preview;
+    job.updatedAt = new Date().toISOString();
+    this.jobUpdates$.next(this.toJobUpdate(job));
   }
 
   cancelJob(jobId: string, reason = 'Upscaling cancelled by user'): void {
