@@ -21,9 +21,9 @@ packages/
 
 1. The frontend uploads a video (`POST /api/upload`, multipart, XHR progress) and receives a `jobId`.
 2. The backend stores the file on disk (Multer), tracks the job in memory, and hands it to the AI service, consuming an NDJSON progress stream. The transport depends on `AI_TRANSFER_MODE` (see below).
-3. The AI service runs BasicVSR + SPyNet (V3 checkpoint, 4x scale) over the video frames. The backend saves the enhanced output to `storage/results` (downloading it from the AI service in `remote` mode).
-4. The frontend follows progress over SSE (`/api/upload/events/:jobId`, with polling fallback), then plays/downloads the result via HTTP Range streaming (`/api/upload/stream/:jobId`).
-5. Jobs can be cancelled end-to-end (`POST /api/upload/cancel/:jobId` bridges to the AI service).
+3. The AI service runs BasicVSR + SPyNet (V3 checkpoint, 4x scale) over the video frames, sampling enhanced preview JPEGs as it goes (first frame, then every `PREVIEW_EVERY_N_FRAMES`th). The backend saves the enhanced output to `storage/results` (downloading it from the AI service in `remote` mode) and downloads each sampled preview over HTTP to `storage/previews` — in **both** transports, since there's no shared disk to rely on.
+4. The frontend follows progress over SSE (`/api/upload/events/:jobId`, with polling fallback), rendering a live before/after preview slider from `GET /api/upload/preview/:jobId/latest` and `GET /api/upload/preview/:jobId/:frameIndex` while the job runs, then plays/downloads the finished result via HTTP Range streaming (`/api/upload/stream/:jobId`) once the job reaches `completed`. Progressive previews are still-frame snapshots, not a live video stream, and the final enhanced MP4 is only ever available after completion.
+5. Jobs can be cancelled end-to-end (`POST /api/upload/cancel/:jobId` bridges to the AI service, which also deletes its cached preview frames for that job).
 
 ### Single-server vs two-server (`AI_TRANSFER_MODE`)
 
@@ -83,9 +83,9 @@ Filter to one app: `pnpm --filter backend dev`, `pnpm --filter backend test:e2e`
 
 Each app commits `.env.development.example` / `.env.production.example`. Backend env is Zod-validated at startup (`apps/backend/src/utils/env.validation.ts`) — see `CLAUDE.md` for the full table. Key ones:
 
-- backend: `PORT`, `CORS_ORIGIN`, `AI_SERVICE_URL`, `AI_TRANSFER_MODE` (`path` | `remote`), `AI_INTERNAL_TOKEN`, `UPLOAD_DIR`, `RESULT_DIR`, `MAX_FILE_SIZE_MB`, `ALLOWED_VIDEO_EXTENSIONS`
+- backend: `PORT`, `CORS_ORIGIN`, `AI_SERVICE_URL`, `AI_TRANSFER_MODE` (`path` | `remote`), `AI_INTERNAL_TOKEN`, `UPLOAD_DIR`, `RESULT_DIR`, `MAX_FILE_SIZE_MB`, `ALLOWED_VIDEO_EXTENSIONS`, `PREVIEW_ENABLED`, `PREVIEW_DIR`
 - frontend: `VITE_PORT`, `VITE_API_BASE_URL` (backend **origin**, no `/api` suffix)
-- ai: `CHECKPOINT_PATH`, `DEVICE`, `MAX_INPUT_HEIGHT`, `HOST`, `PORT`, `AI_INTERNAL_TOKEN`, `WORK_UPLOAD_DIR`, `WORK_RESULT_DIR`
+- ai: `CHECKPOINT_PATH`, `DEVICE`, `MAX_INPUT_HEIGHT`, `HOST`, `PORT`, `AI_INTERNAL_TOKEN`, `WORK_UPLOAD_DIR`, `WORK_RESULT_DIR`, `PREVIEW_ENABLED`, `PREVIEW_EVERY_N_FRAMES`, `PREVIEW_MAX_WIDTH`, `PREVIEW_JPEG_QUALITY`, `WORK_PREVIEW_DIR`
 
 For a two-server deployment set `AI_TRANSFER_MODE=remote`, point `AI_SERVICE_URL` at the GPU server's internal address, and set the **same** `AI_INTERNAL_TOKEN` on both the backend and the AI service. Keep the demo upload cap small (e.g. `MAX_FILE_SIZE_MB=20`). The concrete server addresses, domain, Nginx/PM2/SSL setup are handled by infrastructure tooling, not this repo.
 
@@ -98,7 +98,7 @@ There is **no mock fallback**: if the AI service is down or the checkpoint is mi
 ## Known limitations
 
 - Job state is in-memory; a backend restart loses all jobs. No DB persistence.
-- No automatic cleanup of old jobs or files (uploads, results, and AI work dirs grow until cleared manually).
+- No automatic cleanup of old jobs or files (uploads, results, cached preview frames, and AI work dirs grow until cleared manually).
 - Single-node disk storage per server (`storage/`, gitignored); there is no shared storage between the app and GPU servers — `remote` mode exists precisely because of this.
 - The recommended public-demo upload cap is small (`MAX_FILE_SIZE_MB=20`).
 - Deploy script builds the frontend but static hosting must be configured separately (see `deploy-upscale-ai.sh`).
