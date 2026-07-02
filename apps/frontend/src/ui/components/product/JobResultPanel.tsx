@@ -1,10 +1,10 @@
+import { Download, RotateCcw } from 'lucide-react';
 import { UPLOAD_STREAM_ENDPOINT } from '@repo/consts/upload';
 import { useGetJobResultQuery } from '@/store/api/upscale.api';
 import { Button } from '@/ui/shadcn/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/ui/shadcn/ui/card';
 import { Skeleton } from '@/ui/shadcn/ui/skeleton';
 import { Alert, AlertDescription } from '@/ui/shadcn/ui/alert';
-import { Download, RotateCcw } from 'lucide-react';
 import { buildApiUrl } from '@/config/api';
 
 function downloadFile(url: string, filename: string) {
@@ -18,7 +18,7 @@ function downloadFile(url: string, filename: string) {
       URL.revokeObjectURL(a.href);
     })
     .catch(() => {
-      // Best-effort download; the inline player still works if this fails.
+      // Best-effort download; the inline player above still works.
     });
 }
 
@@ -27,6 +27,10 @@ interface JobResultPanelProps {
   onReset: () => void;
 }
 
+/**
+ * Result actions shown under the ComparisonPlayer once a job completes —
+ * the video itself plays in the player, this panel only offers actions.
+ */
 export function JobResultPanel({ jobId, onReset }: JobResultPanelProps) {
   const { data: result, isLoading, error } = useGetJobResultQuery(jobId);
   const streamUrl = buildApiUrl(UPLOAD_STREAM_ENDPOINT, { jobId });
@@ -34,8 +38,7 @@ export function JobResultPanel({ jobId, onReset }: JobResultPanelProps) {
   if (isLoading) {
     return (
       <Card>
-        <CardContent className="space-y-4 p-6">
-          <Skeleton className="aspect-video w-full rounded-lg" />
+        <CardContent className="p-6">
           <Skeleton className="h-10 w-full" />
         </CardContent>
       </Card>
@@ -47,7 +50,7 @@ export function JobResultPanel({ jobId, onReset }: JobResultPanelProps) {
       <div className="space-y-4">
         <Alert variant="destructive">
           <AlertDescription>
-            Unable to load the enhanced video. Please try again.
+            Unable to load the enhanced video details. Please try again.
           </AlertDescription>
         </Alert>
         <Button variant="outline" onClick={onReset} className="w-full">
@@ -63,11 +66,7 @@ export function JobResultPanel({ jobId, onReset }: JobResultPanelProps) {
       <CardHeader className="pb-3">
         <CardTitle className="text-base">Enhancement Complete</CardTitle>
       </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="overflow-hidden rounded-lg border border-border bg-muted/30">
-          <video src={streamUrl} controls className="aspect-video w-full" />
-        </div>
-
+      <CardContent>
         <div className="flex gap-3">
           <Button
             className="flex-1"

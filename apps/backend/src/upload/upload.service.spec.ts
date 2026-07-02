@@ -54,6 +54,20 @@ describe('UploadService preview propagation', () => {
     });
   });
 
+  it('exposes the original frame URL only when the pair was cached', () => {
+    const service = makeService();
+    const jobId = createJob(service);
+    service.updateJob(jobId, 'processing', 10);
+
+    service.setJobPreview(jobId, { frameIndex: 15, hasOriginal: true });
+    expect(service.getJobStatus(jobId).preview?.originalImageUrl).toBe(
+      `/api/upload/preview/${jobId}/15/original`
+    );
+
+    service.setJobPreview(jobId, { frameIndex: 30 });
+    expect(service.getJobStatus(jobId).preview?.originalImageUrl).toBeUndefined();
+  });
+
   it('emits schema-valid JobUpdates carrying the preview and ignores previews after terminal', () => {
     const service = makeService();
     const jobId = createJob(service);

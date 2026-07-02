@@ -7,6 +7,7 @@ import { AiClientService } from '@/upload/ai-client.service';
 import { UploadService } from '@/upload/upload.service';
 import {
   LATEST_FRAME_KEY,
+  ORIGINAL_KEY_SUFFIX,
   resolvePreviewFilePath
 } from '@/upload/preview-path.util';
 import type {
@@ -76,11 +77,8 @@ export class ProcessingService {
         return;
       }
 
-      const ext = path.extname(job.storedFilename);
-      const outputPath = path.resolve(
-        this.resultDir,
-        `${jobId}_enhanced${ext}`
-      );
+      // Always .mp4: the AI re-encodes its output to browser-safe H.264.
+      const outputPath = path.resolve(this.resultDir, `${jobId}_enhanced.mp4`);
       const abortController = new AbortController();
       this.activeJobs.set(jobId, {
         abortController,
@@ -185,14 +183,16 @@ export class ProcessingService {
       case 'completed': {
         if (this.isCancelled(jobId)) return 'done';
 
+        const signal =
+          this.activeJobs.get(jobId)?.abortController.signal ??
+          new AbortController().signal;
+
         if (this.aiClient.transferMode === 'remote') {
           const downloadPath = update.resultDownloadUrl ?? `/result/${jobId}`;
           await this.aiClient.downloadResult({
             downloadPath,
             destPath: outputPath,
-            signal:
-              this.activeJobs.get(jobId)?.abortController.signal ??
-              new AbortController().signal
+            signal
           });
         }
 
@@ -203,6 +203,12 @@ export class ProcessingService {
         }
         if (this.isCancelled(jobId)) return 'done';
 
+        await this.acquireOriginalComparison(jobId, {
+          originalDownloadUrl: update.originalDownloadUrl,
+          outputPath,
+          signal
+        });
+
         this.uploadService.setResultPath(jobId, outputPath);
         this.uploadService.updateJob(jobId, 'completed', 100);
         this.logger.log(`Job ${jobId}: completed (AI)`);
@@ -212,6 +218,42 @@ export class ProcessingService {
         const exhaustiveCheck: never = update;
         return exhaustiveCheck;
       }
+    }
+  }
+
+  /**
+   * Best-effort acquisition of the browser-safe original comparison video —
+   * the job completes without it (the player degrades to enhanced-only).
+   */
+  private async acquireOriginalComparison(
+    jobId: string,
+    args: {
+      originalDownloadUrl: string | undefined;
+      outputPath: string;
+      signal: AbortSignal;
+    }
+  ): Promise<void> {
+    const originalPath = path.join(
+      path.dirname(args.outputPath),
+      `${jobId}_original.mp4`
+    );
+    try {
+      if (this.aiClient.transferMode === 'remote') {
+        if (!args.originalDownloadUrl) return;
+        await this.aiClient.downloadResult({
+          downloadPath: args.originalDownloadUrl,
+          destPath: originalPath,
+          signal: args.signal
+        });
+      }
+      // Path mode: the AI wrote it next to the enhanced output on shared disk.
+      if (fs.existsSync(originalPath)) {
+        this.uploadService.setOriginalComparisonPath(jobId, originalPath);
+      }
+    } catch (error) {
+      this.logger.warn(
+        `Job ${jobId}: original comparison download failed — ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
     }
   }
 
@@ -262,24 +304,58 @@ export class ProcessingService {
   ): Promise<void> {
     const activeJob = this.activeJobs.get(jobId);
     if (!activeJob || this.isCancelled(jobId)) return;
+    const signal = activeJob.abortController.signal;
 
     await fs.promises.mkdir(path.dirname(paths.destPath), { recursive: true });
     await this.aiClient.downloadPreview({
       downloadPath: preview.downloadUrl,
       destPath: paths.destPath,
-      signal: activeJob.abortController.signal
+      signal
     });
+    await this.publishLatest(paths.destPath, paths.latestPath);
 
-    // Atomic latest.jpg publish: copy to a temp name, then rename over it.
-    const tmpLatest = `${paths.latestPath}.tmp`;
-    await fs.promises.copyFile(paths.destPath, tmpLatest);
-    await fs.promises.rename(tmpLatest, paths.latestPath);
+    // Matching original (input) frame — best-effort; the enhanced preview
+    // still ships without it.
+    let hasOriginal = false;
+    const originalDest = resolvePreviewFilePath(
+      this.previewDir,
+      jobId,
+      `${String(preview.frameIndex)}${ORIGINAL_KEY_SUFFIX}`
+    );
+    const originalLatest = resolvePreviewFilePath(
+      this.previewDir,
+      jobId,
+      `${LATEST_FRAME_KEY}${ORIGINAL_KEY_SUFFIX}`
+    );
+    if (preview.originalDownloadUrl && originalDest && originalLatest) {
+      try {
+        await this.aiClient.downloadPreview({
+          downloadPath: preview.originalDownloadUrl,
+          destPath: originalDest,
+          signal
+        });
+        await this.publishLatest(originalDest, originalLatest);
+        hasOriginal = true;
+      } catch (error) {
+        this.logger.warn(
+          `Job ${jobId}: original preview frame download failed — ${error instanceof Error ? error.message : 'Unknown error'}`
+        );
+      }
+    }
 
     this.uploadService.setJobPreview(jobId, {
       frameIndex: preview.frameIndex,
+      hasOriginal,
       ...(preview.width !== undefined ? { width: preview.width } : {}),
       ...(preview.height !== undefined ? { height: preview.height } : {})
     });
+  }
+
+  /** Atomic latest.jpg publish: copy to a temp name, then rename over it. */
+  private async publishLatest(srcPath: string, latestPath: string): Promise<void> {
+    const tmpLatest = `${latestPath}.tmp`;
+    await fs.promises.copyFile(srcPath, tmpLatest);
+    await fs.promises.rename(tmpLatest, latestPath);
   }
 
   private isCancelled(jobId: string): boolean {

@@ -63,9 +63,9 @@ export const cancelJobContract: EndpointContract<
   paramsSchema: jobIdParamsSchema
 };
 
-// The stream (`UPLOAD_STREAM_ENDPOINT`), SSE (`UPLOAD_EVENTS_ENDPOINT`), and
-// preview (`UPLOAD_PREVIEW_LATEST_ENDPOINT` / `UPLOAD_PREVIEW_FRAME_ENDPOINT`)
-// endpoints are not JSON contracts: the stream returns binary video with HTTP
+// The stream (`UPLOAD_STREAM_ENDPOINT`, `UPLOAD_STREAM_ORIGINAL_ENDPOINT`),
+// SSE (`UPLOAD_EVENTS_ENDPOINT`), and preview (`UPLOAD_PREVIEW_*_ENDPOINT`,
+// including the `/original` frame variants) endpoints are not JSON contracts: the stream returns binary video with HTTP
 // Range support, the SSE endpoint emits server-sent events whose payloads
 // follow `jobUpdateSchema` from `@repo/schemas/jobs` (optionally carrying a
 // `preview`), and the preview endpoints return cached JPEG frames.

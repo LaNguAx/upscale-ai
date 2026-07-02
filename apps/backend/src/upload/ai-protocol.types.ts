@@ -24,6 +24,8 @@ export interface AIPreviewUpdate {
   height?: number;
   /** AI-relative download path, e.g. `/preview/{jobId}/{frameIndex}`. */
   downloadUrl: string;
+  /** Matching original (input) frame, e.g. `/preview/{jobId}/{frameIndex}_in`. */
+  originalDownloadUrl?: string;
 }
 
 /** One NDJSON progress line emitted during inference (no `jobId`). */
@@ -36,8 +38,9 @@ export interface AIProcessingUpdate {
 }
 
 /**
- * Terminal NDJSON line on success. `resultDownloadUrl` is present only in
- * `remote` mode (the path to fetch the enhanced file from the AI service).
+ * Terminal NDJSON line on success. `resultDownloadUrl` (and, when the
+ * comparison encode succeeded, `originalDownloadUrl`) are present only in
+ * `remote` mode (paths to fetch the files from the AI service).
  */
 export interface AICompletedUpdate {
   status: 'completed';
@@ -46,6 +49,7 @@ export interface AICompletedUpdate {
   totalFrames?: number;
   fileSize?: number;
   resultDownloadUrl?: string;
+  originalDownloadUrl?: string;
 }
 
 /** Terminal NDJSON line when inference fails. */

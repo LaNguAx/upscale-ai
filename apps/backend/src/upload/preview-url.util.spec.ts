@@ -12,6 +12,17 @@ describe('resolveAiPreviewUrl', () => {
     );
   });
 
+  it('accepts the original (_in) frame variants', () => {
+    expect(resolveAiPreviewUrl(base, '/preview/job-1/42_in').pathname).toBe(
+      '/preview/job-1/42_in'
+    );
+    expect(resolveAiPreviewUrl(base, '/preview/job-1/latest_in').pathname).toBe(
+      '/preview/job-1/latest_in'
+    );
+    expect(() => resolveAiPreviewUrl(base, '/preview/job-1/42_out')).toThrow();
+    expect(() => resolveAiPreviewUrl(base, '/preview/job-1/_in')).toThrow();
+  });
+
   it('rejects other origins and URL-authority injection', () => {
     expect(() =>
       resolveAiPreviewUrl(base, 'http://evil.test/preview/job-1/1')

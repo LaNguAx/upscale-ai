@@ -9,6 +9,7 @@ from pathlib import Path
 from security import (
     is_valid_frame_index,
     is_valid_job_id,
+    is_valid_preview_file_key,
     resolve_preview_path,
     safe_extension,
     token_matches,
@@ -83,6 +84,34 @@ def test_resolve_preview_path_rejects_unsafe_input():
     assert resolve_preview_path(base, "job-1", "..") is None
     assert resolve_preview_path(base, "job-1", "1/2") is None
     assert resolve_preview_path(base, "job-1", "") is None
+
+
+def test_valid_preview_file_key_accepts_original_variants():
+    assert is_valid_preview_file_key("42")
+    assert is_valid_preview_file_key("42_in")
+    assert is_valid_preview_file_key("latest")
+    assert is_valid_preview_file_key("latest_in")
+
+
+def test_invalid_preview_file_key():
+    assert not is_valid_preview_file_key("")
+    assert not is_valid_preview_file_key("_in")
+    assert not is_valid_preview_file_key("42_out")
+    assert not is_valid_preview_file_key("42_in_in")
+    assert not is_valid_preview_file_key("latest_")
+    assert not is_valid_preview_file_key("../1_in")
+    assert not is_valid_preview_file_key("1" * 10 + "_in")
+
+
+def test_resolve_preview_path_original_variants():
+    base = Path("previews")
+    assert resolve_preview_path(base, "job-1", "42_in") == (
+        base / "job-1" / "42_in.jpg"
+    ).resolve()
+    assert resolve_preview_path(base, "job-1", "latest_in") == (
+        base / "job-1" / "latest_in.jpg"
+    ).resolve()
+    assert resolve_preview_path(base, "job-1", "42_out") is None
 
 
 if __name__ == "__main__":

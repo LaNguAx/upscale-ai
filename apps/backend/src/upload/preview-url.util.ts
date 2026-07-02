@@ -1,4 +1,5 @@
-const AI_PREVIEW_PATH_PATTERN = /^\/preview\/[A-Za-z0-9_-]{1,128}\/(latest|\d{1,9})$/;
+const AI_PREVIEW_PATH_PATTERN =
+  /^\/preview\/[A-Za-z0-9_-]{1,128}\/(latest|\d{1,9})(_in)?$/;
 
 /**
  * Resolves an AI-provided preview download path against the AI service base

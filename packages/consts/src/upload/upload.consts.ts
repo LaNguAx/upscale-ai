@@ -12,3 +12,12 @@ export const UPLOAD_PREVIEW_LATEST_ENDPOINT =
 /** Specific cached preview frame — binary JPEG endpoint, immutable-cacheable. */
 export const UPLOAD_PREVIEW_FRAME_ENDPOINT =
   '/api/upload/preview/:jobId/:frameIndex' as const;
+/** Matching original (input) frame for the latest preview — no-store. */
+export const UPLOAD_PREVIEW_ORIGINAL_LATEST_ENDPOINT =
+  '/api/upload/preview/:jobId/latest/original' as const;
+/** Matching original (input) frame for a cached preview — immutable-cacheable. */
+export const UPLOAD_PREVIEW_ORIGINAL_FRAME_ENDPOINT =
+  '/api/upload/preview/:jobId/:frameIndex/original' as const;
+/** Browser-safe original comparison video (H.264) — HTTP Range endpoint. */
+export const UPLOAD_STREAM_ORIGINAL_ENDPOINT =
+  '/api/upload/stream/:jobId/original' as const;
