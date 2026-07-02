@@ -47,7 +47,7 @@ Errors follow RFC 7807 (ProblemDetails) with a `traceId` from the request-id mid
 pnpm install
 
 # one-time Python setup
-pnpm --filter ai setup
+pnpm --filter ai run setup
 
 # copy env examples (optional — sane defaults exist)
 cp apps/backend/.env.development.example apps/backend/.env.development

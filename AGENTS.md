@@ -20,7 +20,7 @@ Stale docs are treated as bugs. Per-app `CLAUDE.md` files are one-line `@AGENTS.
 
 - `apps/frontend` — Vite 8 + React 19 SPA (port 5173 via `VITE_PORT`). Tailwind v4, shadcn/ui, Redux Toolkit + RTK Query, React Router 7. See `apps/frontend/AGENTS.md`.
 - `apps/backend` — NestJS 11 API under `/api` prefix (port 3000 via `PORT`, Swagger UI at `/docs` in dev). Multer disk uploads, SSE job updates, HTTP Range streaming. Bridges to the AI service over HTTP NDJSON in either `path` or `remote` transport mode (`AI_TRANSFER_MODE`). See `apps/backend/AGENTS.md`.
-- `apps/ai` — Python FastAPI + PyTorch BasicVSR/SPyNet inference service (port 8000). Exposes `/health`, path-based `/process`, multipart `/process-upload`, `/result/:jobId`, `/cancel`, and `/preview/:jobId/latest` + `/preview/:jobId/:frameIndex` (token-guarded internal endpoints). Managed via `requirements.txt`; the `package.json` only wraps uvicorn for Turborepo. Run `pnpm --filter ai setup` once to install Python deps. See `apps/ai/AGENTS.md`.
+- `apps/ai` — Python FastAPI + PyTorch BasicVSR/SPyNet inference service (port 8000). Exposes `/health`, path-based `/process`, multipart `/process-upload`, `/result/:jobId`, `/cancel`, and `/preview/:jobId/latest` + `/preview/:jobId/:frameIndex` (token-guarded internal endpoints). Managed via `requirements.txt`; the `package.json` only wraps uvicorn for Turborepo. Run `pnpm --filter ai run setup` once (the explicit `run` matters — pnpm 10 otherwise invokes its builtin `setup` command) to install Python deps. See `apps/ai/AGENTS.md`.
 
 ### Shared packages
 

@@ -72,6 +72,6 @@ Per-job `threading.Event` in `active_cancellations` (lock-guarded). `/cancel` se
 ## Setup
 
 ```
-pnpm --filter ai setup # pip install -r requirements.txt
+pnpm --filter ai run setup # pip install -r requirements.txt
 pnpm --filter ai dev # uvicorn with reload
 ```
