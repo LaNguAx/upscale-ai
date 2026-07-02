@@ -32,3 +32,21 @@ describe('validateEnv — AI transfer mode', () => {
     expect(env.AI_INTERNAL_TOKEN).toBe('secret-token');
   });
 });
+
+describe('validateEnv preview vars', () => {
+  it('defaults PREVIEW_ENABLED to true and PREVIEW_DIR to the shared storage dir', () => {
+    const env = validateEnv({});
+    expect(env.PREVIEW_ENABLED).toBe(true);
+    expect(env.PREVIEW_DIR).toBe('../../storage/previews');
+  });
+
+  it('parses PREVIEW_ENABLED=false as boolean false', () => {
+    expect(validateEnv({ PREVIEW_ENABLED: 'false' }).PREVIEW_ENABLED).toBe(false);
+  });
+
+  it('rejects non-boolean PREVIEW_ENABLED values', () => {
+    expect(() => validateEnv({ PREVIEW_ENABLED: 'banana' })).toThrow(
+      /PREVIEW_ENABLED/
+    );
+  });
+});
