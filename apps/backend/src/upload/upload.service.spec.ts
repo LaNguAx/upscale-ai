@@ -70,6 +70,11 @@ describe('UploadService preview propagation', () => {
     service.setJobPreview(jobId, { frameIndex: 30 });
     sub.unsubscribe();
 
+    // The sticky-terminal guard must leave the record untouched, not just
+    // unemitted (takeWhile completed the stream at the terminal update, so
+    // the emission count alone cannot detect a broken guard).
+    expect(service.getJobStatus(jobId).preview?.frameIndex).toBe(15);
+
     // startWith (no preview) → preview(15) → completed (still preview 15).
     expect(updates).toHaveLength(3);
     expect(updates[0]?.preview).toBeUndefined();
