@@ -14,7 +14,13 @@ export function configureApp(
 
   // Default helmet includes a strict CSP. We can keep it on because Swagger UI
   // (which ships inline scripts/styles) is never mounted in production.
-  app.use(helmet());
+  // Cross-Origin-Resource-Policy must be relaxed from helmet's `same-origin`
+  // default: the frontend may run on a different origin (e.g. Vite dev on
+  // 5173, or a separate host configured via VITE_API_BASE_URL) and embeds the
+  // preview JPEGs and video streams as <img>/<video> media — browsers block
+  // those with ERR_BLOCKED_BY_RESPONSE.NotSameOrigin under `same-origin`.
+  // Which sites may *fetch* the API is still governed by CORS below.
+  app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
 
   app.setGlobalPrefix('api');
   app.enableCors({
