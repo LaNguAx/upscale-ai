@@ -27,7 +27,10 @@ import type {
 } from '@repo/schemas/upload';
 import { UploadService } from '@/upload/upload.service';
 import { ProcessingService } from '@/upload/processing.service';
-import { LATEST_FRAME_KEY } from '@/upload/preview-path.util';
+import {
+  LATEST_FRAME_KEY,
+  ORIGINAL_KEY_SUFFIX
+} from '@/upload/preview-path.util';
 import {
   CancelJobResponseDto,
   JobIdParamsDto,
@@ -128,6 +131,19 @@ export class UploadController {
     return this.uploadService.getJobUpdates$(params.jobId);
   }
 
+  @Get('stream/:jobId/original')
+  @ApiParam({ name: 'jobId', description: 'Job identifier' })
+  streamOriginal(
+    @Param() params: JobIdParamsDto,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response
+  ): StreamableFile {
+    const { filePath, filename } = this.uploadService.getOriginalStreamInfo(
+      params.jobId
+    );
+    return this.streamVideoFile({ filePath, filename, req, res });
+  }
+
   @Get('stream/:jobId')
   @ApiParam({ name: 'jobId', description: 'Job identifier' })
   stream(
@@ -138,6 +154,17 @@ export class UploadController {
     const { filePath, filename } = this.uploadService.getStreamInfo(
       params.jobId
     );
+    return this.streamVideoFile({ filePath, filename, req, res });
+  }
+
+  /** Serves a local video file with HTTP Range support (206 partial). */
+  private streamVideoFile(args: {
+    filePath: string;
+    filename: string;
+    req: Request;
+    res: Response;
+  }): StreamableFile {
+    const { filePath, filename, req, res } = args;
     const stat = fs.statSync(filePath);
     const fileSize = stat.size;
     const ext = path.extname(filename).toLowerCase();
@@ -171,21 +198,44 @@ export class UploadController {
     return new StreamableFile(fs.createReadStream(filePath));
   }
 
+  @Get('preview/:jobId/latest/original')
+  @ApiParam({ name: 'jobId', description: 'Job identifier' })
+  previewLatestOriginal(
+    @Param() params: PreviewLatestParamsDto,
+    @Res({ passthrough: true }) res: Response
+  ): StreamableFile {
+    return this.servePreviewFile(res, {
+      jobId: params.jobId,
+      frameKey: `${LATEST_FRAME_KEY}${ORIGINAL_KEY_SUFFIX}`,
+      cacheControl: 'no-store'
+    });
+  }
+
   @Get('preview/:jobId/latest')
   @ApiParam({ name: 'jobId', description: 'Job identifier' })
   previewLatest(
     @Param() params: PreviewLatestParamsDto,
     @Res({ passthrough: true }) res: Response
   ): StreamableFile {
-    const { filePath } = this.uploadService.getPreviewStreamInfo(
-      params.jobId,
-      LATEST_FRAME_KEY
-    );
-    res.set({
-      'Content-Type': 'image/jpeg',
-      'Cache-Control': 'no-store'
+    return this.servePreviewFile(res, {
+      jobId: params.jobId,
+      frameKey: LATEST_FRAME_KEY,
+      cacheControl: 'no-store'
     });
-    return new StreamableFile(fs.createReadStream(filePath));
+  }
+
+  @Get('preview/:jobId/:frameIndex/original')
+  @ApiParam({ name: 'jobId', description: 'Job identifier' })
+  @ApiParam({ name: 'frameIndex', description: 'Sampled preview frame index' })
+  previewFrameOriginal(
+    @Param() params: PreviewFrameParamsDto,
+    @Res({ passthrough: true }) res: Response
+  ): StreamableFile {
+    return this.servePreviewFile(res, {
+      jobId: params.jobId,
+      frameKey: `${params.frameIndex}${ORIGINAL_KEY_SUFFIX}`,
+      cacheControl: 'public, max-age=31536000, immutable'
+    });
   }
 
   @Get('preview/:jobId/:frameIndex')
@@ -195,13 +245,24 @@ export class UploadController {
     @Param() params: PreviewFrameParamsDto,
     @Res({ passthrough: true }) res: Response
   ): StreamableFile {
+    return this.servePreviewFile(res, {
+      jobId: params.jobId,
+      frameKey: params.frameIndex,
+      cacheControl: 'public, max-age=31536000, immutable'
+    });
+  }
+
+  private servePreviewFile(
+    res: Response,
+    args: { jobId: string; frameKey: string; cacheControl: string }
+  ): StreamableFile {
     const { filePath } = this.uploadService.getPreviewStreamInfo(
-      params.jobId,
-      params.frameIndex
+      args.jobId,
+      args.frameKey
     );
     res.set({
       'Content-Type': 'image/jpeg',
-      'Cache-Control': 'public, max-age=31536000, immutable'
+      'Cache-Control': args.cacheControl
     });
     return new StreamableFile(fs.createReadStream(filePath));
   }

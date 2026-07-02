@@ -16,6 +16,15 @@ describe('resolvePreviewFilePath', () => {
     );
   });
 
+  it('resolves the original (_in) frame variants', () => {
+    expect(resolvePreviewFilePath('previews', 'job-1', '42_in')).toBe(
+      path.join(base, 'job-1', '42_in.jpg')
+    );
+    expect(resolvePreviewFilePath('previews', 'job-1', 'latest_in')).toBe(
+      path.join(base, 'job-1', 'latest_in.jpg')
+    );
+  });
+
   it('rejects traversal and malformed input', () => {
     expect(resolvePreviewFilePath('previews', '../evil', '1')).toBeNull();
     expect(resolvePreviewFilePath('previews', 'a/b', 'latest')).toBeNull();
@@ -25,5 +34,8 @@ describe('resolvePreviewFilePath', () => {
     expect(resolvePreviewFilePath('previews', 'job-1', '1.5')).toBeNull();
     expect(resolvePreviewFilePath('previews', 'job-1', '1234567890')).toBeNull();
     expect(resolvePreviewFilePath('previews', 'job-1', '')).toBeNull();
+    expect(resolvePreviewFilePath('previews', 'job-1', '_in')).toBeNull();
+    expect(resolvePreviewFilePath('previews', 'job-1', '42_out')).toBeNull();
+    expect(resolvePreviewFilePath('previews', 'job-1', '42_in_in')).toBeNull();
   });
 });

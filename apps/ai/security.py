@@ -20,7 +20,11 @@ def is_valid_job_id(job_id: str) -> bool:
 
 
 FRAME_INDEX_PATTERN = re.compile(r"^\d{1,9}$")
+# File keys: 'latest' or a frame index, each optionally with the '_in'
+# (original/input frame) suffix — e.g. '42', '42_in', 'latest', 'latest_in'.
+PREVIEW_FILE_KEY_PATTERN = re.compile(r"^(latest|\d{1,9})(_in)?$")
 LATEST_FRAME_KEY = "latest"
+ORIGINAL_KEY_SUFFIX = "_in"
 
 
 def is_valid_frame_index(frame_key: str) -> bool:
@@ -28,15 +32,21 @@ def is_valid_frame_index(frame_key: str) -> bool:
     return bool(FRAME_INDEX_PATTERN.fullmatch(frame_key))
 
 
+def is_valid_preview_file_key(file_key: str) -> bool:
+    """True for 'latest' or a frame index, optionally suffixed with '_in'."""
+    return bool(PREVIEW_FILE_KEY_PATTERN.fullmatch(file_key))
+
+
 def resolve_preview_path(preview_dir: Path, job_id: str, frame_key: str) -> Path | None:
     """Return the absolute path of a preview JPEG, or ``None`` if unsafe.
 
-    ``frame_key`` is either ``"latest"`` or a decimal frame index. The result
-    is guaranteed to stay inside ``preview_dir`` — callers never supply paths.
+    ``frame_key`` is ``"latest"`` or a decimal frame index, optionally with the
+    ``"_in"`` (original frame) suffix. The result is guaranteed to stay inside
+    ``preview_dir`` — callers never supply paths.
     """
     if not is_valid_job_id(job_id):
         return None
-    if frame_key != LATEST_FRAME_KEY and not is_valid_frame_index(frame_key):
+    if not is_valid_preview_file_key(frame_key):
         return None
     base = preview_dir.resolve()
     candidate = (base / job_id / f"{frame_key}.jpg").resolve()

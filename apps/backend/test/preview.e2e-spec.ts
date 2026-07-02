@@ -52,4 +52,25 @@ describe('Preview endpoints (e2e)', () => {
       .get('/api/upload/preview/a.b/latest')
       .expect(400);
   });
+
+  it('returns 404 for unknown-job original frame routes', async () => {
+    await request(app.getHttpServer())
+      .get('/api/upload/preview/no-such-job/latest/original')
+      .expect(404);
+    await request(app.getHttpServer())
+      .get('/api/upload/preview/no-such-job/12/original')
+      .expect(404);
+  });
+
+  it('returns 400 for a malformed frame index on the original route', () => {
+    return request(app.getHttpServer())
+      .get('/api/upload/preview/no-such-job/not-a-frame/original')
+      .expect(400);
+  });
+
+  it('returns 404 for the original comparison stream of an unknown job', () => {
+    return request(app.getHttpServer())
+      .get('/api/upload/stream/no-such-job/original')
+      .expect(404);
+  });
 });

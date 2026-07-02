@@ -184,15 +184,15 @@ class VSRInferenceEngine:
         max_height: int = 480,
         progress_callback: Optional[Callable[[int, int], None]] = None,
         should_cancel: Optional[Callable[[], bool]] = None,
-        preview_callback: Optional[Callable[[int, int, np.ndarray], None]] = None,
+        preview_callback: Optional[Callable[[int, int, np.ndarray, np.ndarray], None]] = None,
     ) -> dict:
         """
         Process a full video and save enhanced output.
 
         Args:
             preview_callback, when provided, receives (frame_number, total_frames,
-            enhanced_bgr_frame) for every frame after it is written; sampling and
-            any I/O are the caller's responsibility.
+            enhanced_bgr_frame, input_bgr_frame) for every frame after it is
+            written; sampling and any I/O are the caller's responsibility.
 
         Returns: {"frames": N, "fps": float, "input_res": (w, h), "output_res": (w, h)}
         """
@@ -223,7 +223,9 @@ class VSRInferenceEngine:
                     progress_callback(i + 1, n)
 
                 if preview_callback:
-                    preview_callback(i + 1, n, sr_bgr)
+                    preview_callback(
+                        i + 1, n, sr_bgr, self._tensor_to_frame(lr_tensors[i])
+                    )
         finally:
             writer.release()
 

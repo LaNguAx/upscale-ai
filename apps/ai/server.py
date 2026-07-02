@@ -19,6 +19,7 @@ import logging
 import os
 import queue
 import shutil
+import subprocess
 import threading
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -33,6 +34,7 @@ from pydantic import BaseModel
 from baseline import VSRInferenceEngine, SEQ_LEN, SCALE, InferenceCancelledError
 from security import (
     LATEST_FRAME_KEY,
+    ORIGINAL_KEY_SUFFIX,
     is_valid_job_id,
     resolve_preview_path,
     safe_extension,
@@ -168,9 +170,9 @@ def _ensure_model_ready() -> None:
 
 
 def _write_preview_files(
-    job_id: str, frame_index: int, frame_bgr: np.ndarray
+    job_id: str, frame_index: int, frame_bgr: np.ndarray, suffix: str = ""
 ) -> tuple[int, int] | None:
-    """Write ``{frameIndex}.jpg`` and ``latest.jpg`` atomically.
+    """Write ``{frameIndex}{suffix}.jpg`` and ``latest{suffix}.jpg`` atomically.
 
     Downscales to ``PREVIEW_MAX_WIDTH`` (aspect preserved, never upscales) and
     returns the written (width, height), or ``None`` if encoding failed.
@@ -191,11 +193,65 @@ def _write_preview_files(
     job_dir = WORK_PREVIEW_DIR / job_id
     job_dir.mkdir(parents=True, exist_ok=True)
     data = encoded.tobytes()
-    for name in (f"{frame_index}.jpg", f"{LATEST_FRAME_KEY}.jpg"):
+    for name in (f"{frame_index}{suffix}.jpg", f"{LATEST_FRAME_KEY}{suffix}.jpg"):
         tmp_path = job_dir / f".{name}.tmp"
         tmp_path.write_bytes(data)
         os.replace(tmp_path, job_dir / name)
     return width, height
+
+
+def _transcode_to_h264(src: str, dest: str, scale: tuple[int, int] | None = None) -> bool:
+    """Re-encode a video to browser-safe H.264/yuv420p MP4 (atomic replace).
+
+    Returns True on success; on failure logs a warning and leaves ``dest``
+    untouched. Same proven args as the engine's OpenCV decode fallback.
+    """
+    tmp_dest = f"{dest}.transcode.tmp.mp4"
+    command = ["ffmpeg", "-y", "-i", src, "-an", "-c:v", "libx264", "-pix_fmt", "yuv420p"]
+    if scale is not None:
+        command += ["-vf", f"scale={scale[0]}:{scale[1]}"]
+    command += ["-movflags", "+faststart", tmp_dest]
+    try:
+        result = subprocess.run(command, capture_output=True, text=True)
+    except OSError as e:
+        logger.warning(f"ffmpeg not runnable for {src}: {e}")
+        return False
+    if result.returncode != 0:
+        logger.warning(
+            f"H.264 transcode failed for {src}: "
+            f"{(result.stderr or result.stdout).strip()[-500:]}"
+        )
+        Path(tmp_dest).unlink(missing_ok=True)
+        return False
+    os.replace(tmp_dest, dest)
+    return True
+
+
+def _original_video_path(output_path: str) -> str:
+    """Derive `{jobId}_original.mp4` next to the enhanced output path."""
+    stem = Path(output_path).stem
+    if stem.endswith("_enhanced"):
+        stem = stem[: -len("_enhanced")]
+    return str(Path(output_path).with_name(f"{stem}_original.mp4"))
+
+
+def _finalize_outputs(
+    job_id: str, input_path: str, output_path: str, input_res: tuple[int, int]
+) -> None:
+    """Make the browser-facing artifacts playable everywhere.
+
+    1. Re-encodes the raw OpenCV ``mp4v`` output to H.264 in place (browsers
+       cannot decode mp4v). On failure the raw file is kept (degraded).
+    2. Encodes a browser-safe original-comparison video at the inference input
+       resolution (``{jobId}_original.mp4``). Best-effort — the job completes
+       without it.
+    """
+    if _transcode_to_h264(output_path, output_path):
+        logger.info(f"Job {job_id}: enhanced output re-encoded to H.264")
+
+    original_path = _original_video_path(output_path)
+    if _transcode_to_h264(input_path, original_path, scale=input_res):
+        logger.info(f"Job {job_id}: original comparison video written")
 
 
 def run_inference_stream(
@@ -233,7 +289,12 @@ def run_inference_stream(
 
     preview_active = PREVIEW_ENABLED and is_valid_job_id(job_id)
 
-    def preview_callback(current_frame: int, total_frames: int, frame_bgr: np.ndarray) -> None:
+    def preview_callback(
+        current_frame: int,
+        total_frames: int,
+        frame_bgr: np.ndarray,
+        input_bgr: np.ndarray,
+    ) -> None:
         if current_frame != 1 and current_frame % PREVIEW_EVERY_N_FRAMES != 0:
             return
         try:
@@ -241,17 +302,27 @@ def run_inference_stream(
             if size is None:
                 return
             width, height = size
+            preview: dict[str, object] = {
+                "frameIndex": current_frame,
+                "width": width,
+                "height": height,
+                "downloadUrl": f"/preview/{job_id}/{current_frame}",
+            }
+            # Matching original (input) frame — best-effort; the enhanced
+            # preview still ships if this write fails.
+            original_size = _write_preview_files(
+                job_id, current_frame, input_bgr, suffix=ORIGINAL_KEY_SUFFIX
+            )
+            if original_size is not None:
+                preview["originalDownloadUrl"] = (
+                    f"/preview/{job_id}/{current_frame}{ORIGINAL_KEY_SUFFIX}"
+                )
             progress_queue.put(json.dumps({
                 "status": "processing",
                 "progress": max(last_percent[0], 0),
                 "currentFrame": current_frame,
                 "totalFrames": total_frames,
-                "preview": {
-                    "frameIndex": current_frame,
-                    "width": width,
-                    "height": height,
-                    "downloadUrl": f"/preview/{job_id}/{current_frame}",
-                },
+                "preview": preview,
             }))
         except Exception as e:  # previews must never fail inference
             logger.warning(
@@ -268,6 +339,7 @@ def run_inference_stream(
                 should_cancel=cancel_event.is_set,
                 preview_callback=preview_callback if preview_active else None,
             )
+            _finalize_outputs(job_id, input_path, output_path, result["input_res"])
             file_size = os.path.getsize(output_path) if os.path.exists(output_path) else 0
             completed: dict[str, object] = {
                 "status": "completed",
@@ -278,10 +350,13 @@ def run_inference_stream(
             }
             if result_download_url is not None:
                 completed["resultDownloadUrl"] = result_download_url
+                if os.path.exists(_original_video_path(output_path)):
+                    completed["originalDownloadUrl"] = f"/result/{job_id}/original"
             progress_queue.put(json.dumps(completed))
         except InferenceCancelledError:
             if os.path.exists(output_path):
                 os.remove(output_path)
+            Path(_original_video_path(output_path)).unlink(missing_ok=True)
             if preview_active:
                 shutil.rmtree(WORK_PREVIEW_DIR / job_id, ignore_errors=True)
             cancelled_line = json.dumps({
@@ -369,7 +444,9 @@ async def process_upload(
     job_id = validate_job_id(jobId)
     ext = safe_extension(video.filename)
     input_path = str(WORK_UPLOAD_DIR / f"{job_id}{ext}")
-    output_path = str(WORK_RESULT_DIR / f"{job_id}_enhanced{ext}")
+    # Always .mp4: the writer produces a valid mp4v/.mp4 intermediate which the
+    # finalize step re-encodes to H.264 in place for browser playback.
+    output_path = str(WORK_RESULT_DIR / f"{job_id}_enhanced.mp4")
 
     try:
         with open(input_path, "wb") as buffer:
@@ -386,12 +463,9 @@ async def process_upload(
     )
 
 
-@app.get("/result/{job_id}", dependencies=[Depends(require_token)])
-def get_result(job_id: str):
-    """Serve only enhanced results from ``WORK_RESULT_DIR``; no path input."""
-    job_id = validate_job_id(job_id)
-
-    matches = sorted(WORK_RESULT_DIR.glob(f"{job_id}_enhanced.*"))
+def _serve_result_file(job_id: str, glob_pattern: str) -> FileResponse:
+    """Serve one file from ``WORK_RESULT_DIR`` by job-scoped pattern; no path input."""
+    matches = sorted(WORK_RESULT_DIR.glob(glob_pattern))
     if not matches:
         raise HTTPException(status_code=404, detail="Result not found")
 
@@ -405,6 +479,20 @@ def get_result(job_id: str):
         media_type="application/octet-stream",
         filename=result_path.name,
     )
+
+
+@app.get("/result/{job_id}/original", dependencies=[Depends(require_token)])
+def get_result_original(job_id: str):
+    """Serve the browser-safe original-comparison video for a job."""
+    job_id = validate_job_id(job_id)
+    return _serve_result_file(job_id, f"{job_id}_original.mp4")
+
+
+@app.get("/result/{job_id}", dependencies=[Depends(require_token)])
+def get_result(job_id: str):
+    """Serve only enhanced results from ``WORK_RESULT_DIR``; no path input."""
+    job_id = validate_job_id(job_id)
+    return _serve_result_file(job_id, f"{job_id}_enhanced.*")
 
 
 def _serve_preview(job_id: str, frame_key: str) -> FileResponse:

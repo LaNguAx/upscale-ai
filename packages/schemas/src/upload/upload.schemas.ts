@@ -9,6 +9,8 @@ export type UploadResponse = z.infer<typeof uploadResponseSchema>;
 export const jobResultSchema = z.object({
   jobId: z.string(),
   downloadUrl: z.string(),
+  /** Browser-safe original comparison video, when available. */
+  originalStreamUrl: z.string().optional(),
   originalFilename: z.string(),
   outputFilename: z.string()
 });

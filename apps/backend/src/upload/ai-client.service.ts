@@ -234,7 +234,7 @@ export class AiClientService {
     }
     if (
       target.origin !== base.origin ||
-      !/^\/result\/[A-Za-z0-9_-]{1,128}$/.test(target.pathname)
+      !/^\/result\/[A-Za-z0-9_-]{1,128}(\/original)?$/.test(target.pathname)
     ) {
       throw new Error('Refusing to download result from an unexpected URL.');
     }

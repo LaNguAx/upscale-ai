@@ -10,11 +10,13 @@ export const jobStateSchema = z.enum([
 
 export type JobState = z.infer<typeof jobStateSchema>;
 
-/** Latest enhanced preview frame cached by the backend for a job. */
+/** Latest preview frame pair cached by the backend for a job. */
 export const jobPreviewSchema = z.object({
   frameIndex: z.number().int().nonnegative(),
-  /** Public backend path, e.g. `/api/upload/preview/{jobId}/{frameIndex}`. */
+  /** Enhanced frame — public backend path, e.g. `/api/upload/preview/{jobId}/{frameIndex}`. */
   imageUrl: z.string(),
+  /** Matching original (input) frame, e.g. `/api/upload/preview/{jobId}/{frameIndex}/original`. */
+  originalImageUrl: z.string().optional(),
   width: z.number().int().positive().optional(),
   height: z.number().int().positive().optional()
 });

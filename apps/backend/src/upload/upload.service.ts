@@ -20,11 +20,13 @@ import type { JobResult, UploadResponse } from '@repo/schemas/upload';
 import { resolvePreviewFilePath } from '@/upload/preview-path.util';
 import type { Env } from '@/utils/env.validation';
 
-/** Internal preview metadata; the public imageUrl is derived on emission. */
+/** Internal preview metadata; the public URLs are derived on emission. */
 export interface JobPreviewMetadata {
   frameIndex: number;
   width?: number;
   height?: number;
+  /** True when the matching original (input) frame was cached too. */
+  hasOriginal?: boolean;
 }
 
 interface JobRecord {
@@ -35,6 +37,8 @@ interface JobRecord {
   storedFilename: string;
   uploadPath: string;
   resultPath: string;
+  /** Browser-safe original comparison video, once downloaded/located. */
+  originalComparisonPath?: string;
   createdAt: string;
   updatedAt: string;
   error?: string;
@@ -91,9 +95,13 @@ export class UploadService {
 
   private toJobPreview(job: JobRecord): JobPreview | undefined {
     if (!job.preview) return undefined;
+    const frameBase = `/api/upload/preview/${job.jobId}/${String(job.preview.frameIndex)}`;
     return {
       frameIndex: job.preview.frameIndex,
-      imageUrl: `/api/upload/preview/${job.jobId}/${String(job.preview.frameIndex)}`,
+      imageUrl: frameBase,
+      originalImageUrl: job.preview.hasOriginal
+        ? `${frameBase}/original`
+        : undefined,
       width: job.preview.width,
       height: job.preview.height
     };
@@ -179,8 +187,12 @@ export class UploadService {
     return {
       jobId: job.jobId,
       downloadUrl: `/api/upload/stream/${job.jobId}`,
+      originalStreamUrl: job.originalComparisonPath
+        ? `/api/upload/stream/${job.jobId}/original`
+        : undefined,
       originalFilename: job.originalFilename,
-      outputFilename: `${name}_enhanced_by_upscale${ext}`
+      // The enhanced result is always re-encoded to browser-safe H.264 MP4.
+      outputFilename: `${name}_enhanced_by_upscale.mp4`
     };
   }
 
@@ -193,6 +205,21 @@ export class UploadService {
     return {
       filePath: job.resultPath,
       filename: job.originalFilename
+    };
+  }
+
+  getOriginalStreamInfo(jobId: string): { filePath: string; filename: string } {
+    const job = this.jobs.get(jobId);
+    if (!job) {
+      throw new NotFoundException(`Job ${jobId} not found`);
+    }
+    if (!job.originalComparisonPath || !fs.existsSync(job.originalComparisonPath)) {
+      throw new NotFoundException('Original comparison video not available');
+    }
+
+    return {
+      filePath: job.originalComparisonPath,
+      filename: `${job.jobId}_original.mp4`
     };
   }
 
@@ -217,6 +244,13 @@ export class UploadService {
     const job = this.jobs.get(jobId);
     if (job && job.state === 'processing') {
       job.resultPath = resultPath;
+    }
+  }
+
+  setOriginalComparisonPath(jobId: string, filePath: string): void {
+    const job = this.jobs.get(jobId);
+    if (job && job.state === 'processing') {
+      job.originalComparisonPath = filePath;
     }
   }
 

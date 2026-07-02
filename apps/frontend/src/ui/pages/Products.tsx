@@ -1,9 +1,12 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback } from 'react';
 import { ZoomIn, RotateCcw } from 'lucide-react';
+import type { JobPreview } from '@repo/schemas/jobs';
 import { PageContainer } from '@/ui/components/PageContainer';
 import { VideoUploadForm } from '@/ui/components/product/VideoUploadForm';
 import { JobStatusPanel } from '@/ui/components/product/JobStatusPanel';
 import { JobResultPanel } from '@/ui/components/product/JobResultPanel';
+import { ComparisonPlayer } from '@/ui/components/product/ComparisonPlayer';
+import { ProductErrorBoundary } from '@/ui/components/product/ProductErrorBoundary';
 import { Alert, AlertDescription } from '@/ui/shadcn/ui/alert';
 import { Button } from '@/ui/shadcn/ui/button';
 import {
@@ -82,26 +85,18 @@ export function Products() {
   const [cancelJob] = useCancelJobMutation();
   const dispatch = useAppDispatch();
 
-  const [originalUrl, setOriginalUrl] = useState<string | null>(null);
-  const originalUrlRef = useRef<string | null>(null);
+  const [preview, setPreview] = useState<JobPreview | null>(null);
 
-  const replaceOriginalUrl = useCallback((file: File | null) => {
-    if (originalUrlRef.current) URL.revokeObjectURL(originalUrlRef.current);
-    const next = file ? URL.createObjectURL(file) : null;
-    originalUrlRef.current = next;
-    setOriginalUrl(next);
+  /** Keep the freshest frame: a slow poll can resolve after a newer SSE update. */
+  const handlePreview = useCallback((incoming: JobPreview) => {
+    setPreview((current) =>
+      current && current.frameIndex > incoming.frameIndex ? current : incoming
+    );
   }, []);
-
-  useEffect(
-    () => () => {
-      if (originalUrlRef.current) URL.revokeObjectURL(originalUrlRef.current);
-    },
-    []
-  );
 
   const handleUpload = useCallback(
     async (file: File) => {
-      replaceOriginalUrl(file);
+      setPreview(null);
       setPageState('uploading');
       setUploadProgress(0);
       setUploadError(null);
@@ -133,7 +128,7 @@ export function Products() {
         setPageState('idle');
       }
     },
-    [uploadVideo, dispatch, replaceOriginalUrl]
+    [uploadVideo, dispatch]
   );
 
   const handleReset = useCallback(() => {
@@ -143,8 +138,8 @@ export function Products() {
     setUploadError(null);
     setProcessingError(null);
     setIsStopping(false);
-    replaceOriginalUrl(null);
-  }, [replaceOriginalUrl]);
+    setPreview(null);
+  }, []);
 
   const handleStopUpscaling = useCallback(async () => {
     if (!jobId) return;
@@ -181,74 +176,99 @@ export function Products() {
           </Alert>
         )}
 
-        {(pageState === 'idle' || pageState === 'uploading') && (
-          <VideoUploadForm
-            onUpload={(file) => {
-              void handleUpload(file);
-            }}
-            isUploading={pageState === 'uploading'}
-            uploadProgress={uploadProgress}
-          />
-        )}
+        <ProductErrorBoundary onReset={handleReset}>
+          {(pageState === 'idle' || pageState === 'uploading') && (
+            <VideoUploadForm
+              onUpload={(file) => {
+                void handleUpload(file);
+              }}
+              isUploading={pageState === 'uploading'}
+              uploadProgress={uploadProgress}
+            />
+          )}
 
-        {pageState === 'processing' && jobId && (
-          <JobStatusPanel
-            jobId={jobId}
-            originalSrc={originalUrl}
-            onCompleted={() => {
-              setPageState('completed');
-            }}
-            onCancelled={(reason) => {
-              setProcessingError(reason ?? 'Upscaling cancelled by user.');
-              setPageState('cancelled');
-              setIsStopping(false);
-            }}
-            onFailed={(reason) => {
-              setProcessingError(
-                reason ?? 'AI inference failed. Please try again.'
-              );
-              setPageState('failed');
-              setIsStopping(false);
-            }}
-            onStop={() => {
-              void handleStopUpscaling();
-            }}
-            isStopping={isStopping}
-          />
-        )}
+          {(pageState === 'processing' || pageState === 'completed') &&
+            jobId && (
+              <div className="space-y-4">
+                {/* One player across processing → completed: no remount, no swap. */}
+                <ComparisonPlayer
+                  key={jobId}
+                  jobId={jobId}
+                  phase={pageState === 'completed' ? 'completed' : 'processing'}
+                  preview={preview}
+                />
 
-        {pageState === 'completed' && jobId && (
-          <JobResultPanel jobId={jobId} onReset={handleReset} />
-        )}
+                {pageState === 'processing' && (
+                  <JobStatusPanel
+                    jobId={jobId}
+                    onPreview={handlePreview}
+                    onCompleted={() => {
+                      setPageState('completed');
+                    }}
+                    onCancelled={(reason) => {
+                      setProcessingError(
+                        reason ?? 'Upscaling cancelled by user.'
+                      );
+                      setPageState('cancelled');
+                      setIsStopping(false);
+                    }}
+                    onFailed={(reason) => {
+                      setProcessingError(
+                        reason ?? 'AI inference failed. Please try again.'
+                      );
+                      setPageState('failed');
+                      setIsStopping(false);
+                    }}
+                    onStop={() => {
+                      void handleStopUpscaling();
+                    }}
+                    isStopping={isStopping}
+                  />
+                )}
 
-        {pageState === 'failed' && (
-          <div className="space-y-4">
-            <Alert variant="destructive">
-              <AlertDescription>
-                {processingError ??
-                  'Video processing failed. This may be due to an unsupported format or a server issue.'}
-              </AlertDescription>
-            </Alert>
-            <Button variant="outline" onClick={handleReset} className="w-full">
-              <RotateCcw className="size-4" data-icon="inline-start" />
-              Try Again
-            </Button>
-          </div>
-        )}
+                {pageState === 'completed' && (
+                  <JobResultPanel jobId={jobId} onReset={handleReset} />
+                )}
+              </div>
+            )}
 
-        {pageState === 'cancelled' && (
-          <div className="space-y-4">
-            <Alert>
-              <AlertDescription>
-                {processingError ?? 'Upscaling cancelled successfully.'}
-              </AlertDescription>
-            </Alert>
-            <Button variant="outline" onClick={handleReset} className="w-full">
-              <RotateCcw className="size-4" data-icon="inline-start" />
-              Upload New Video
-            </Button>
-          </div>
-        )}
+          {pageState === 'failed' && (
+            <div className="space-y-4">
+              <Alert variant="destructive">
+                <AlertDescription>
+                  {processingError ??
+                    'Video processing failed. This may be due to an unsupported format or a server issue.'}
+                </AlertDescription>
+              </Alert>
+              <Button
+                variant="outline"
+                onClick={handleReset}
+                className="w-full"
+              >
+                <RotateCcw className="size-4" data-icon="inline-start" />
+                Try Again
+              </Button>
+            </div>
+          )}
+
+          {pageState === 'cancelled' && (
+            <div className="space-y-4">
+              <Alert>
+                <AlertDescription>
+                  {processingError ?? 'Upscaling cancelled successfully.'}
+                </AlertDescription>
+              </Alert>
+              <Button
+                variant="outline"
+                onClick={handleReset}
+                className="w-full"
+              >
+                <RotateCcw className="size-4" data-icon="inline-start" />
+                Upload New Video
+              </Button>
+            </div>
+          )}
+        </ProductErrorBoundary>
       </PageContainer>
     </section>
   );
