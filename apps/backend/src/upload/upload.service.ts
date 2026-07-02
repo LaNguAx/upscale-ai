@@ -17,6 +17,7 @@ import {
   type JobUpdate
 } from '@repo/schemas/jobs';
 import type { JobResult, UploadResponse } from '@repo/schemas/upload';
+import { resolvePreviewFilePath } from '@/upload/preview-path.util';
 import type { Env } from '@/utils/env.validation';
 
 /** Internal preview metadata; the public imageUrl is derived on emission. */
@@ -193,6 +194,19 @@ export class UploadService {
       filePath: job.resultPath,
       filename: job.originalFilename
     };
+  }
+
+  getPreviewStreamInfo(jobId: string, frameKey: string): { filePath: string } {
+    const job = this.jobs.get(jobId);
+    if (!job) {
+      throw new NotFoundException(`Job ${jobId} not found`);
+    }
+
+    const filePath = resolvePreviewFilePath(this.previewDir, jobId, frameKey);
+    if (!filePath || !fs.existsSync(filePath)) {
+      throw new NotFoundException('Preview not found');
+    }
+    return { filePath };
   }
 
   getJobRecord(jobId: string): JobRecord | undefined {
