@@ -12,6 +12,7 @@ Python FastAPI inference service for video super-resolution. Port 8000. PyTorch 
 - `baseline/__init__.py` — V3 constants (`SCALE = 4`, `SEQ_LEN = 15`, feature/block counts) and re-exports.
 - `baseline/model_architecture.py` — BasicVSR + SPyNet model definition. **Do not modify without an explicit request.** SPyNet auto-downloads pretrained weights from OpenMMLab on first init (needs network).
 - `baseline/vsr_inference.py` — `VSRInferenceEngine` (frame loop, cancellation, progress callbacks).
+- `ARCHITECTURE.md` — deep dive into the network (layers, SPyNet, loss function, V3 training recipe from `baseline/Model_v3.ipynb`).
 - `checkpoints/` — model weights (`vsr_model_best.pth`, gitignored, ~21 MB). Without it the server boots with `model_loaded: false` and `/process` returns 503.
 
 ## Two transports

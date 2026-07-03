@@ -2,7 +2,7 @@
 
 Python FastAPI inference service for video super-resolution, built on PyTorch BasicVSR + SPyNet (V3 checkpoint: 4x scale, 15-frame sequences). The NestJS backend calls it over HTTP and consumes an NDJSON progress stream.
 
-Part of the UPscale monorepo — see the root [README](../../README.md) and [AGENTS.md](AGENTS.md) for the full picture.
+Part of the UPscale monorepo — see the root [README](../../README.md) and [AGENTS.md](AGENTS.md) for the full picture. For a deep dive into the neural network itself (layers, SPyNet, loss function, training recipe), see [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## Quick start
 
@@ -21,11 +21,15 @@ On first model load, SPyNet pretrained weights are downloaded from OpenMMLab —
 
 ## Endpoints
 
-| Method | Path       | Purpose                                             |
-| ------ | ---------- | --------------------------------------------------- |
-| GET    | `/health`  | `{ status, device, model_loaded }`                  |
-| POST   | `/process` | Run inference; streams NDJSON progress lines        |
-| POST   | `/cancel`  | Cancel an active job (404 if the job is not active) |
+| Method | Path                          | Purpose                                                        |
+| ------ | ----------------------------- | -------------------------------------------------------------- |
+| GET    | `/health`                     | `{ status, device, model_loaded }`                             |
+| POST   | `/process`                    | Path-based inference; streams NDJSON progress lines            |
+| POST   | `/process-upload`             | Multipart inference (remote transport); streams NDJSON         |
+| GET    | `/result/{jobId}`             | Download the enhanced result (H.264 `.mp4`)                    |
+| GET    | `/result/{jobId}/original`    | Download the browser-safe original comparison video            |
+| GET    | `/preview/{jobId}/{frameKey}` | Sampled preview JPEG (`latest`, index, or `_in` original keys) |
+| POST   | `/cancel`                     | Cancel an active job (404 if the job is not active)            |
 
 The exact NDJSON message shapes are documented in [AGENTS.md](AGENTS.md).
 
@@ -41,9 +45,9 @@ The exact NDJSON message shapes are documented in [AGENTS.md](AGENTS.md).
 ## Requirements
 
 - Python with the deps from `requirements.txt` (torch, opencv-python, fastapi, uvicorn, ...).
-- **ffmpeg** on PATH — used as a decode fallback when OpenCV cannot read a video.
+- **ffmpeg** on PATH — required: every result is re-encoded to browser-safe H.264 (plus the original comparison video), and it is the decode fallback when OpenCV cannot read a video.
 - CUDA GPU optional but recommended (~8 GB VRAM for 720p output); CPU works but is slow.
-- The backend exchanges absolute file paths with this service — both must share a filesystem.
+- Transport with the backend is selected by its `AI_TRANSFER_MODE`: `path` (shared filesystem) or `remote` (multipart upload + result download, no shared storage).
 
 ## Notes
 
