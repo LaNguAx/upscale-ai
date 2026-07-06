@@ -1,10 +1,14 @@
+<p align="center">
+  <img src="apps/frontend/public/upscale-logo.png" alt="UPscale Logo" width="260"/>
+</p>
+
 # UPscale
 
 AI-powered video restoration and super-resolution. B.Sc. Computer Science final project (Deep Learning specialization).
 
 A pnpm + Turborepo monorepo with three apps and a shared full-stack contract chain:
 
-```
+```text
 apps/
 ├── frontend    Vite 8 + React 19 SPA (Tailwind v4, shadcn/ui, RTK Query)   :5173
 ├── backend     NestJS 11 API under /api (uploads, jobs, SSE, streaming)    :3000
@@ -61,9 +65,9 @@ Swagger UI is served at `http://localhost:3000/docs` in development.
 
 ## Commands
 
-| Command            | Purpose                                            |
-| ------------------ | -------------------------------------------------- |
-| `pnpm dev`         | Start all apps in watch mode                       |
+| Command                | Purpose                                            |
+| ---------------------- | -------------------------------------------------- |
+| `pnpm dev`             | Start all apps in watch mode                       |
 | `pnpm dev:web`         | Start frontend + backend only (no AI service)      |
 | `pnpm dev:ai`          | Start the AI inference service only                |
 | `pnpm build`           | Build all packages and apps (bottom-up, cached)    |
@@ -73,9 +77,9 @@ Swagger UI is served at `http://localhost:3000/docs` in development.
 | `pnpm start:prod`      | Build, then run in pure production mode            |
 | `pnpm start:prod:web`  | Build, then run frontend + backend in prod mode    |
 | `pnpm start:prod:ai`   | Run the AI service in production mode              |
-| `pnpm lint`        | Lint everything (`--max-warnings 0`)               |
-| `pnpm check-types` | Type-check everything                              |
-| `pnpm format`      | Prettier-format the repo                           |
+| `pnpm lint`            | Lint everything (`--max-warnings 0`)               |
+| `pnpm check-types`     | Type-check everything                              |
+| `pnpm format`          | Prettier-format the repo                           |
 
 Filter to one app: `pnpm --filter backend dev`, `pnpm --filter backend test:e2e`, etc.
 
