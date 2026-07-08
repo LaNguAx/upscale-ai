@@ -1,10 +1,14 @@
+<p align="center">
+  <img src="apps/frontend/public/upscale-logo.png" alt="UPscale Logo" width="260"/>
+</p>
+
 # UPscale
 
 AI-powered video restoration and super-resolution. B.Sc. Computer Science final project (Deep Learning specialization).
 
 A pnpm + Turborepo monorepo with three apps and a shared full-stack contract chain:
 
-```
+```text
 apps/
 ├── frontend    Vite 8 + React 19 SPA (Tailwind v4, shadcn/ui, RTK Query)   :5173
 ├── backend     NestJS 11 API under /api (uploads, jobs, SSE, streaming)    :3000
