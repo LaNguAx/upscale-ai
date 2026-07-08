@@ -15,7 +15,7 @@ Or directly: `python -m uvicorn server:app --reload --port 8000` from this direc
 
 ### Model checkpoint
 
-Place the weights at `checkpoints/vsr_model_best.pth` (gitignored, ~21 MB) or point `CHECKPOINT_PATH` elsewhere. Without it the server still boots, but `/health` reports `model_loaded: false` and `/process` returns 503.
+Two checkpoints ship in `checkpoints/` (~21 MB each, committed): `vsr_model_best.pth` (V3, the default) and `vsr_model_v4_best_codec_psnr.pth` (V4 codec-degradation fine-tune). The default load path is the V3 file — set `CHECKPOINT_PATH` to select another checkpoint. Without a checkpoint the server still boots, but `/health` reports `model_loaded: false` and `/process` returns 503. `/health` also reports the loaded checkpoint filename (`checkpoint`), so you can verify which weights a deployment runs.
 
 On first model load, SPyNet pretrained weights are downloaded from OpenMMLab — network access is required once.
 
@@ -23,7 +23,7 @@ On first model load, SPyNet pretrained weights are downloaded from OpenMMLab —
 
 | Method | Path       | Purpose                                             |
 | ------ | ---------- | --------------------------------------------------- |
-| GET    | `/health`  | `{ status, device, model_loaded }`                  |
+| GET    | `/health`  | `{ status, device, model_loaded, checkpoint }`      |
 | POST   | `/process` | Run inference; streams NDJSON progress lines        |
 | POST   | `/cancel`  | Cancel an active job (404 if the job is not active) |
 

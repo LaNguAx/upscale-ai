@@ -405,6 +405,7 @@ def health():
         "status": "ok",
         "device": DEVICE_NAME,
         "model_loaded": model_loaded,
+        "checkpoint": Path(CHECKPOINT_PATH).name if model_loaded else None,
     }
 
 
