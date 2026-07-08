@@ -301,6 +301,8 @@ class CustomVideoDataset(Dataset):
 
 
 def seed_worker(worker_id):
+    # One OpenCV thread pool per worker multiplies RAM and thrashes the CPU.
+    cv2.setNumThreads(0)
     worker_seed = torch.initial_seed() % 2**32
     np.random.seed(worker_seed)
     random.seed(worker_seed)
@@ -311,18 +313,28 @@ def eval_collate_fn(batch):
     return torch.stack(lr_list, dim=0), torch.stack(hr_list, dim=0), list(meta_list)
 
 
-def make_loader(dataset, batch_size, shuffle, args, generator=None):
+def make_loader(dataset, batch_size, args, sampler=None, generator=None):
     return DataLoader(
         dataset,
         batch_size=batch_size,
-        shuffle=shuffle,
+        sampler=sampler,
         num_workers=args.num_workers,
         pin_memory=True,
         worker_init_fn=seed_worker if args.num_workers > 0 else None,
         generator=generator,
         collate_fn=eval_collate_fn,
-        multiprocessing_context="fork" if args.num_workers > 0 and sys.platform.startswith("linux") else None,
+        # spawn, not fork: forked workers inherit a COW snapshot of the parent
+        # (CUDA context included) that gradually unshares and eats container RAM.
+        multiprocessing_context="spawn" if args.num_workers > 0 else None,
     )
+
+
+def epoch_permutation(n, base_seed, epoch):
+    """Deterministic shuffle order for one epoch, independent of crash/resume
+    history — required to skip straight to batch N after a mid-epoch restart."""
+    g = torch.Generator()
+    g.manual_seed(clip_seed(base_seed, f"epoch-{epoch}"))
+    return torch.randperm(n, generator=g).tolist()
 
 
 # ── losses (ported unchanged from Model_v3.ipynb cell 9) ─────────────────────
@@ -511,36 +523,103 @@ def evaluate_model(model, loader, criterion, device, scale=4, shave_border=4, co
     }
 
 
-def train_one_epoch(model, loader, optimizer, criterion, device, grad_clip_norm=1.0):
+# ── resumable training state ─────────────────────────────────────────────────
+
+
+def atomic_torch_save(obj, path: Path) -> None:
+    """Crash-safe save: never leaves a truncated file at the final path."""
+    tmp = path.with_name(path.name + ".tmp")
+    torch.save(obj, tmp)
+    tmp.replace(path)
+
+
+def capture_rng_states():
+    states = {
+        "python": random.getstate(),
+        "numpy": np.random.get_state(),
+        "torch_cpu": torch.get_rng_state(),
+    }
+    if torch.cuda.is_available():
+        states["torch_cuda"] = torch.cuda.get_rng_state_all()
+    return states
+
+
+def restore_rng_states(states) -> None:
+    random.setstate(states["python"])
+    np.random.set_state(states["numpy"])
+    torch.set_rng_state(states["torch_cpu"])
+    cuda_states = states.get("torch_cuda")
+    if torch.cuda.is_available() and cuda_states is not None:
+        try:
+            torch.cuda.set_rng_state_all(cuda_states)
+        except RuntimeError as exc:
+            # GPU count can differ across temporary environments.
+            print(f"Could not restore CUDA RNG state ({exc}) — continuing with fresh CUDA seeds")
+
+
+def train_step(model, optimizer, criterion, lr_seq, hr_seq, device, grad_clip_norm):
+    """One optimization step. Returns the loss value, or None for a skipped
+    (non-finite) batch."""
+    lr_seq = lr_seq.to(device, non_blocking=True)
+    hr_seq = hr_seq.to(device, non_blocking=True)
+    if not torch.isfinite(lr_seq).all() or not torch.isfinite(hr_seq).all():
+        return None
+
+    optimizer.zero_grad(set_to_none=True)
+    pred = model(lr_seq)
+    if not torch.isfinite(pred).all():
+        return None
+    loss = criterion(pred, hr_seq)
+    if not torch.isfinite(loss):
+        return None
+
+    loss.backward()
+    if grad_clip_norm is not None:
+        torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip_norm)
+    optimizer.step()
+    return loss.item()
+
+
+def train_one_epoch(
+    model, dataset, optimizer, criterion, device, args, epoch, resume, save_mid_state, grad_clip_norm=1.0
+):
     model.train()
+    perm = epoch_permutation(len(dataset), args.seed, epoch)
+    total_batches = math.ceil(len(perm) / args.batch_size)
+
+    start_batch = 0
     running_loss = 0.0
     valid_batches = 0
     skipped_batches = 0
+    if resume is not None:
+        start_batch = int(resume["next_batch"])
+        running_loss = float(resume["running_loss"])
+        valid_batches = int(resume["valid_batches"])
+        skipped_batches = int(resume["skipped_batches"])
+        print(f"Resuming epoch {epoch + 1} at batch {start_batch}/{total_batches}", flush=True)
 
-    for lr_seq, hr_seq, _ in tqdm(loader, desc="Train", leave=False):
-        lr_seq = lr_seq.to(device, non_blocking=True)
-        hr_seq = hr_seq.to(device, non_blocking=True)
-        if not torch.isfinite(lr_seq).all() or not torch.isfinite(hr_seq).all():
-            skipped_batches += 1
-            continue
+    if start_batch < total_batches:
+        g = torch.Generator()
+        g.manual_seed(clip_seed(args.seed, f"loader/{epoch}/{start_batch}"))
+        loader = make_loader(
+            dataset, args.batch_size, args, sampler=perm[start_batch * args.batch_size :], generator=g
+        )
+        progress = tqdm(loader, desc="Train", leave=False, initial=start_batch, total=total_batches)
+        for offset, (lr_seq, hr_seq, _) in enumerate(progress):
+            loss_val = train_step(model, optimizer, criterion, lr_seq, hr_seq, device, grad_clip_norm)
+            if loss_val is None:
+                skipped_batches += 1
+            else:
+                running_loss += loss_val
+                valid_batches += 1
 
-        optimizer.zero_grad(set_to_none=True)
-        pred = model(lr_seq)
-        if not torch.isfinite(pred).all():
-            skipped_batches += 1
-            continue
-        loss = criterion(pred, hr_seq)
-        if not torch.isfinite(loss):
-            skipped_batches += 1
-            continue
+            next_batch = start_batch + offset + 1
+            if args.save_every > 0 and next_batch % args.save_every == 0 and next_batch < total_batches:
+                save_mid_state(next_batch, running_loss, valid_batches, skipped_batches)
 
-        loss.backward()
-        if grad_clip_norm is not None:
-            torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip_norm)
-        optimizer.step()
-
-        running_loss += loss.item()
-        valid_batches += 1
+    # Save at the train/val boundary so a crash during validation replays only
+    # the validation, not the epoch.
+    save_mid_state(total_batches, running_loss, valid_batches, skipped_batches)
 
     if skipped_batches > 0:
         print(f"Skipped {skipped_batches} non-finite train batches")
@@ -577,6 +656,12 @@ def parse_args():
     parser.add_argument("--replay-ratio", type=float, default=0.25, help="Fraction of train data using old V3 LR")
     parser.add_argument("--num-workers", type=int, default=8)
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument(
+        "--save-every",
+        type=int,
+        default=500,
+        help="Save resumable training state every N train batches (0 = epoch boundaries only)",
+    )
     parser.add_argument("--max-clips", type=int, default=None, help="Subset of train clips (smoke tests)")
     parser.add_argument("--data-only", action="store_true", help="Build the V4 splits and exit (no training)")
     parser.add_argument(
@@ -614,8 +699,6 @@ def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print("device:", device)
 
-    g = torch.Generator()
-    g.manual_seed(args.seed)
     train_dataset = CustomVideoDataset(
         v4_splits / "train", seq_len=args.seq_len, patch_size=args.patch_size, training=True, scale=args.scale
     )
@@ -625,9 +708,8 @@ def main():
     val_old_dataset = CustomVideoDataset(
         v4_splits / "val_old", seq_len=args.seq_len, patch_size=args.patch_size, training=False, scale=args.scale
     )
-    train_loader = make_loader(train_dataset, args.batch_size, shuffle=True, args=args, generator=g)
-    val_codec_loader = make_loader(val_codec_dataset, 1, shuffle=False, args=args)
-    val_old_loader = make_loader(val_old_dataset, 1, shuffle=False, args=args)
+    val_codec_loader = make_loader(val_codec_dataset, 1, args=args)
+    val_old_loader = make_loader(val_old_dataset, 1, args=args)
 
     model = BasicVSRRecurrentSeq(
         seq_len=args.seq_len, scale=args.scale, num_feats=64, num_extract_blocks=5, num_prop_blocks=20, num_recon_blocks=5
@@ -682,10 +764,13 @@ def main():
     best_combined = float("inf")
     best_codec_psnr = -float("inf")
     baseline = None
+    in_epoch = None
 
     if state_path.exists():
         print(f"Resuming from {state_path}")
-        state = torch.load(state_path, map_location=device)
+        # weights_only=False: the state carries RNG states (numpy arrays inside
+        # tuples) and plain-python history — our own trusted file.
+        state = torch.load(state_path, map_location="cpu", weights_only=False)
         model.load_state_dict(state["model_state_dict"])
         optimizer.load_state_dict(state["optimizer_state_dict"])
         scheduler.load_state_dict(state["scheduler_state_dict"])
@@ -694,6 +779,29 @@ def main():
         best_codec_psnr = float(state["best_codec_psnr"])
         history = state["history"]
         baseline = state.get("baseline")
+        in_epoch = state.get("in_epoch")
+        if state.get("rng_states") is not None:
+            restore_rng_states(state["rng_states"])
+
+    def save_training_state(epoch_completed, in_epoch_state=None):
+        """Atomic full snapshot; `in_epoch_state` marks a mid-epoch position
+        (None = clean epoch boundary)."""
+        atomic_torch_save(
+            {
+                "epoch_completed": epoch_completed,
+                "model_state_dict": model.state_dict(),
+                "optimizer_state_dict": optimizer.state_dict(),
+                "scheduler_state_dict": scheduler.state_dict(),
+                "best_combined": best_combined,
+                "best_codec_psnr": best_codec_psnr,
+                "history": history,
+                "baseline": baseline,
+                "config": vars(args),
+                "in_epoch": in_epoch_state,
+                "rng_states": capture_rng_states(),
+            },
+            state_path,
+        )
 
     if baseline is None:
         # Baseline: the untouched V3 checkpoint on both val sets. The whole point
@@ -706,12 +814,39 @@ def main():
             f"  baseline old: psnr={base_old['psnr']:.2f} loss={base_old['loss']:.4f} | "
             f"codec: psnr={base_codec['psnr']:.2f} (bicubic {base_codec['bicubic_psnr']:.2f}) loss={base_codec['loss']:.4f}"
         )
+        save_training_state(start_epoch)
 
     for epoch in range(start_epoch, args.epochs):
         current_epoch = epoch + 1
         current_lr = optimizer.param_groups[0]["lr"]
 
-        train_loss = train_one_epoch(model, train_loader, optimizer, criterion, device, grad_clip_norm=1.0)
+        resume_state = in_epoch if in_epoch is not None and int(in_epoch["epoch"]) == epoch else None
+        in_epoch = None
+
+        def save_mid_state(next_batch, running_loss, valid_batches, skipped_batches, epoch=epoch):
+            save_training_state(
+                epoch,
+                in_epoch_state={
+                    "epoch": epoch,
+                    "next_batch": next_batch,
+                    "running_loss": running_loss,
+                    "valid_batches": valid_batches,
+                    "skipped_batches": skipped_batches,
+                },
+            )
+
+        train_loss = train_one_epoch(
+            model,
+            train_dataset,
+            optimizer,
+            criterion,
+            device,
+            args,
+            epoch,
+            resume=resume_state,
+            save_mid_state=save_mid_state,
+            grad_clip_norm=1.0,
+        )
         val_old = evaluate_model(model, val_old_loader, criterion, device, scale=args.scale, shave_border=args.scale)
         val_codec = evaluate_model(model, val_codec_loader, criterion, device, scale=args.scale, shave_border=args.scale)
         combined = 0.5 * (val_old["loss"] + val_codec["loss"])
@@ -746,33 +881,20 @@ def main():
 
         if combined < best_combined:
             best_combined = combined
-            torch.save(model.state_dict(), best_path)
+            atomic_torch_save(model.state_dict(), best_path)
             print(f"  saved best-combined -> {best_path.name}")
         if val_codec["psnr"] > best_codec_psnr:
             best_codec_psnr = val_codec["psnr"]
-            torch.save(model.state_dict(), best_codec_psnr_path)
+            atomic_torch_save(model.state_dict(), best_codec_psnr_path)
             print(f"  saved best-codec-psnr -> {best_codec_psnr_path.name}")
-        torch.save(model.state_dict(), last_path)
+        atomic_torch_save(model.state_dict(), last_path)
 
-        torch.save(
-            {
-                "epoch_completed": current_epoch,
-                "model_state_dict": model.state_dict(),
-                "optimizer_state_dict": optimizer.state_dict(),
-                "scheduler_state_dict": scheduler.state_dict(),
-                "best_combined": best_combined,
-                "best_codec_psnr": best_codec_psnr,
-                "history": history,
-                "baseline": baseline,
-                "config": vars(args),
-            },
-            state_path,
-        )
+        save_training_state(current_epoch)
         with open(history_path, "w") as f:
             json.dump({"baseline": baseline, "history": history}, f, indent=2)
 
         if current_epoch % 5 == 0:
-            torch.save(model.state_dict(), save_dir / f"epoch_{current_epoch:03d}.pth")
+            atomic_torch_save(model.state_dict(), save_dir / f"epoch_{current_epoch:03d}.pth")
 
     print(f"\nDone. Best combined val loss: {best_combined:.4f}, best codec PSNR: {best_codec_psnr:.2f}")
     print(f"Deploy candidate: {best_path}")
