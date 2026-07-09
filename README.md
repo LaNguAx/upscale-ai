@@ -65,21 +65,21 @@ Swagger UI is served at `http://localhost:3000/docs` in development.
 
 ## Commands
 
-| Command                | Purpose                                            |
-| ---------------------- | -------------------------------------------------- |
-| `pnpm dev`             | Start all apps in watch mode                       |
-| `pnpm dev:web`         | Start frontend + backend only (no AI service)      |
-| `pnpm dev:ai`          | Start the AI inference service only                |
-| `pnpm build`           | Build all packages and apps (bottom-up, cached)    |
-| `pnpm preview`         | Build, then run in local production-rehearsal mode |
-| `pnpm preview:web`     | Build, then run frontend + backend only            |
-| `pnpm preview:ai`      | Run the AI service in production mode (no reload)  |
-| `pnpm start:prod`      | Build, then run in pure production mode            |
-| `pnpm start:prod:web`  | Build, then run frontend + backend in prod mode    |
-| `pnpm start:prod:ai`   | Run the AI service in production mode              |
-| `pnpm lint`            | Lint everything (`--max-warnings 0`)               |
-| `pnpm check-types`     | Type-check everything                              |
-| `pnpm format`          | Prettier-format the repo                           |
+| Command               | Purpose                                            |
+| --------------------- | -------------------------------------------------- |
+| `pnpm dev`            | Start all apps in watch mode                       |
+| `pnpm dev:web`        | Start frontend + backend only (no AI service)      |
+| `pnpm dev:ai`         | Start the AI inference service only                |
+| `pnpm build`          | Build all packages and apps (bottom-up, cached)    |
+| `pnpm preview`        | Build, then run in local production-rehearsal mode |
+| `pnpm preview:web`    | Build, then run frontend + backend only            |
+| `pnpm preview:ai`     | Run the AI service in production mode (no reload)  |
+| `pnpm start:prod`     | Build, then run in pure production mode            |
+| `pnpm start:prod:web` | Build, then run frontend + backend in prod mode    |
+| `pnpm start:prod:ai`  | Run the AI service in production mode              |
+| `pnpm lint`           | Lint everything (`--max-warnings 0`)               |
+| `pnpm check-types`    | Type-check everything                              |
+| `pnpm format`         | Prettier-format the repo                           |
 
 Filter to one app: `pnpm --filter backend dev`, `pnpm --filter backend test:e2e`, etc.
 
@@ -98,6 +98,32 @@ For a two-server deployment set `AI_TRANSFER_MODE=remote`, point `AI_SERVICE_URL
 `apps/ai/baseline/` contains the V3 architecture: **BasicVSR with a SPyNet optical-flow backbone** (sequence length 15, 4x upscale). `vsr_inference.py` exposes `VSRInferenceEngine` with frame-window batching, progress callbacks, and cooperative cancellation. Training artifacts live in `Model_v3.ipynb`. Inference parameters are owned by the engine/checkpoint — the backend does not override them.
 
 There is **no mock fallback**: if the AI service is down or the checkpoint is missing, jobs fail with a clear error.
+
+## Demo degradation pipeline
+
+`scripts/create_degraded_demo.py` turns a clean video into a synthetic low-resolution input for demoing the x4 model, using ffmpeg (must be on PATH). Place a source video at `demo/input/demo1.mp4`, then run:
+
+```
+python scripts/create_degraded_demo.py
+```
+
+This writes:
+
+- `demo/degraded/demo1_dirty_lr.mp4` — downscaled x4, mild blur, mild noise, strong compression; the model input.
+- `demo/degraded/demo1_dirty_preview_x4.mp4` — the above upscaled back x4 with nearest-neighbor only, for visual before/after comparison (not a model output).
+
+Pass a different path as an argument to use another source video: `python scripts/create_degraded_demo.py path/to/video.mp4`. `demo/input`, `demo/degraded`, and `demo/output` are gitignored (except `.gitkeep`) — none of these video files are committed.
+
+## YouTube-style degradation and V4 fine-tuning
+
+The V3 checkpoint was trained on per-frame image degradations only (blur/noise/JPEG), so it under-performs on real codec-compressed videos (YouTube-style macroblocking, temporal artifacts). Two scripts close that gap without touching `Model_v3.ipynb` or the V3 workspace:
+
+- `scripts/degrade_clip_video.py` — per-**clip** degradation ending in a real H.264 encode/decode round-trip (random CRF 23–38, optional second encode to mimic re-upload). All parameters are sampled once per clip, so the LR data has temporally consistent degradation. Video mode (`python scripts/degrade_clip_video.py demo/input/demo3.mp4 --preview`) writes `demo/degraded/<stem>_youtube_lr.mp4` (+ a nearest-neighbor x4 preview); directory mode takes a folder of HR PNG frames and writes `hr_frames/` + `lr_frames/` (more with `--variants N`). Sampled parameters are printed per clip.
+- `scripts/finetune_v4_youtube.py` — standalone V4 training entrypoint, meant to run in the training environment that built the V3 splits (copy it there together with `degrade_clip_video.py` and `apps/ai/baseline/model_architecture.py`). It builds a new split tree under `vsr_workspace/experiments/model_v4_finetune_youtube/` (HR frames symlinked from V3, new codec LR generated per clip, a replay subset keeping the old V3 LR against catastrophic forgetting, plus `val_old`/`val_codec` sets), then fine-tunes the V3 checkpoint with SPyNet frozen at LR `2.5e-5`, checkpointing on the best combined old+codec val loss. Start with `--data-only --max-clips 5` to build and visually inspect the degraded LR frames before spending GPU time; resume is automatic from the V4 `training_state.pth` — including mid-epoch: the full training state (model, optimizer, scheduler, RNG states, batch position, running loss counters) is snapshotted atomically every `--save-every` train batches (default 500) and at the train/val boundary, so a crash or environment reset resumes from the last saved batch instead of replaying the whole epoch. The V3 experiment directory is only ever read.
+
+The fine-tuned weights (`vsr_model_v4_best_combined.pth`) are drop-in for the app: copy into `apps/ai/checkpoints/` and point `CHECKPOINT_PATH` at them.
+
+Operational guide for running the fine-tune on a temporary GPU environment (required files, start/restart procedure, crash diagnosis): `scripts/GPU_TRAINING_RUNBOOK.md`.
 
 ## Known limitations
 

@@ -12,7 +12,7 @@ Python FastAPI inference service for video super-resolution. Port 8000. PyTorch 
 - `baseline/__init__.py` — V3 constants (`SCALE = 4`, `SEQ_LEN = 15`, feature/block counts) and re-exports.
 - `baseline/model_architecture.py` — BasicVSR + SPyNet model definition. **Do not modify without an explicit request.** SPyNet auto-downloads pretrained weights from OpenMMLab on first init (needs network).
 - `baseline/vsr_inference.py` — `VSRInferenceEngine` (frame loop, cancellation, progress callbacks).
-- `checkpoints/` — model weights (`vsr_model_best.pth`, gitignored, ~21 MB). Without it the server boots with `model_loaded: false` and `/process` returns 503.
+- `checkpoints/` — model weights, committed to the repo (~21 MB each, force-added past the `**/checkpoints/*.pth` gitignore rule): `vsr_model_best.pth` (V3, the default) and `vsr_model_v4_best_codec_psnr.pth` (V4 codec-degradation fine-tune — select it via `CHECKPOINT_PATH`). Without a checkpoint the server boots with `model_loaded: false` and `/process` returns 503.
 
 ## Two transports
 
@@ -29,7 +29,7 @@ Remote-mode files live under `WORK_UPLOAD_DIR`/`WORK_RESULT_DIR`: uploads at `{j
 
 This protocol is consumed by `apps/backend/src/upload/ai-client.service.ts` (typed in `ai-protocol.types.ts`). There is **no shared Zod/Pydantic schema** for it — any change here must be mirrored in the backend (and in these docs).
 
-- `GET /health` → `{ "status": "ok", "device": "<cuda|cpu>", "model_loaded": <bool> }`. Always unauthenticated. Note: this shape is different from the backend's `/api/health` schema in `@repo/schemas/health` — do not conflate them.
+- `GET /health` → `{ "status": "ok", "device": "<cuda|cpu>", "model_loaded": <bool>, "checkpoint": "<filename>" | null }` (`checkpoint` is the loaded weights filename, `null` when no model is loaded — use it to verify which checkpoint a deployment runs). Always unauthenticated. Note: this shape is different from the backend's `/api/health` schema in `@repo/schemas/health` — do not conflate them.
 - `POST /process` (path mode) and `POST /process-upload` (remote mode, multipart `jobId` + `video`) both return `application/x-ndjson` `StreamingResponse`, one JSON object per line:
   - Progress (emitted only when the integer percent changes; no `jobId`):
     `{ "status": "processing", "progress": 42, "currentFrame": 210, "totalFrames": 500 }`

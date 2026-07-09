@@ -15,6 +15,8 @@ export interface AIHealthResponse {
   status: string;
   device?: string;
   model_loaded?: boolean;
+  /** Filename of the loaded checkpoint, or null when no model is loaded. */
+  checkpoint?: string | null;
 }
 
 /** Preview frame metadata optionally attached to a `processing` line. */

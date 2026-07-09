@@ -12,6 +12,12 @@ coverage
 .vscode
 .idea
 storage
+demo/input/*
+demo/degraded/*
+demo/output/*
+!demo/input/.gitkeep
+!demo/degraded/.gitkeep
+!demo/output/.gitkeep
 **/checkpoints/*.pth
 __pycache__
 .playwright-mcp/
