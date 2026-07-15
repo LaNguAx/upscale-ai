@@ -145,8 +145,7 @@ export function VideoUploadForm({
               Drag &amp; drop your video here
             </p>
             <p className="mt-1 text-xs text-muted-foreground">
-              or click to browse &middot; MP4, AVI, MKV, MOV, WebM &middot; up
-              to 500 MB
+              or click to browse &middot; MP4, AVI, MKV, MOV, WebM
             </p>
           </>
         )}

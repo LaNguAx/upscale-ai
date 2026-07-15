@@ -7,7 +7,7 @@ const STEPS = [
     icon: Upload,
     title: 'Upload Your Video',
     description:
-      'Select a low-quality or legacy video file. We support MP4, AVI, MKV, MOV, and WebM formats up to 500 MB.'
+      'Select a low-quality or legacy video file. We support MP4, AVI, MKV, MOV, and WebM formats.'
   },
   {
     icon: Cpu,
