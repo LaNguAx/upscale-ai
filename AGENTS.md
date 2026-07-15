@@ -25,7 +25,7 @@ Stale docs are treated as bugs. Per-app `CLAUDE.md` files are one-line `@AGENTS.
 ### Shared packages
 
 - `@repo/consts` — endpoint path strings (`/api/health`, `/api/upload`, status/result/cancel/stream/events) and app constants. Leaf package.
-- `@repo/schemas` — Zod 4 schemas and inferred types. Subpaths: `/health`, `/jobs` (`JobState`, `JobStatus`, `JobUpdate`, `isTerminalJobState`, `jobPreviewSchema` incl. optional `originalImageUrl`), `/upload` (`UploadResponse`, `JobResult`, `CancelJobResponse`), `/errors` (RFC 7807 `problemDetailsSchema`).
+- `@repo/schemas` — Zod 4 schemas and inferred types. Subpaths: `/health`, `/jobs` (`JobState`, `JobStatus`, `JobUpdate`, `isTerminalJobState`, `jobPreviewSchema` incl. optional `originalImageUrl` and flipbook pacing metadata `fps`/`stride`), `/upload` (`UploadResponse`, `JobResult`, `CancelJobResponse`), `/errors` (RFC 7807 `problemDetailsSchema`).
 - `@repo/contracts` — typed `EndpointContract<TResponse, TBody, TParams, TQuery>` objects combining consts + schemas. The binary stream and SSE endpoints are path-only (documented in `upload.contracts.ts`).
 - `@repo/eslint-config` — ESLint 9 flat configs: `base`, `node`, `react-internal`.
 - `@repo/typescript-config` — TS presets: `base.json`, `node.json`, `vite.json` (plus `nextjs.json`/`react-library.json` kept for parity with the upstream starter).
