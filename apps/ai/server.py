@@ -85,7 +85,7 @@ def _env_flag(name: str, default: str = "true") -> bool:
 
 # Progressive preview generation (sampled enhanced JPEG frames during inference).
 PREVIEW_ENABLED = _env_flag("PREVIEW_ENABLED")
-PREVIEW_EVERY_N_FRAMES = max(1, int(os.environ.get("PREVIEW_EVERY_N_FRAMES", "15")))
+PREVIEW_EVERY_N_FRAMES = max(1, int(os.environ.get("PREVIEW_EVERY_N_FRAMES", "2")))
 PREVIEW_MAX_WIDTH = int(os.environ.get("PREVIEW_MAX_WIDTH", "640"))
 PREVIEW_JPEG_QUALITY = int(os.environ.get("PREVIEW_JPEG_QUALITY", "80"))
 WORK_PREVIEW_DIR = _resolve_work_dir(
@@ -200,6 +200,27 @@ def _write_preview_files(
     return width, height
 
 
+def _probe_fps(input_path: str) -> float:
+    """Best-effort source-fps probe for preview pacing (never raises).
+
+    The engine also reads fps, but only returns it after inference finishes —
+    preview lines are emitted during inference, so the server probes it itself
+    (same 30.0 fallback the engine uses for broken metadata).
+    """
+    try:
+        cap = cv2.VideoCapture(input_path)
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        cap.release()
+    except Exception:
+        fps = 0.0
+    return fps if fps and fps > 0 else 30.0
+
+
+def _cleanup_previews(job_id: str) -> None:
+    """Delete a job's cached preview frames — useless once the job is terminal."""
+    shutil.rmtree(WORK_PREVIEW_DIR / job_id, ignore_errors=True)
+
+
 def _transcode_to_h264(src: str, dest: str, scale: tuple[int, int] | None = None) -> bool:
     """Re-encode a video to browser-safe H.264/yuv420p MP4 (atomic replace).
 
@@ -288,6 +309,7 @@ def run_inference_stream(
             progress_queue.put(line)
 
     preview_active = PREVIEW_ENABLED and is_valid_job_id(job_id)
+    source_fps = _probe_fps(input_path) if preview_active else 30.0
 
     def preview_callback(
         current_frame: int,
@@ -307,6 +329,8 @@ def run_inference_stream(
                 "width": width,
                 "height": height,
                 "downloadUrl": f"/preview/{job_id}/{current_frame}",
+                "fps": source_fps,
+                "stride": PREVIEW_EVERY_N_FRAMES,
             }
             # Matching original (input) frame — best-effort; the enhanced
             # preview still ships if this write fails.
@@ -353,12 +377,17 @@ def run_inference_stream(
                 if os.path.exists(_original_video_path(output_path)):
                     completed["originalDownloadUrl"] = f"/result/{job_id}/original"
             progress_queue.put(json.dumps(completed))
+            # Preview frames are useless once the final video exists. Cleaning
+            # after the completed line is queued gives in-flight backend proxy
+            # fetches a wider window; a racing fetch just gets a harmless 404.
+            if preview_active:
+                _cleanup_previews(job_id)
         except InferenceCancelledError:
             if os.path.exists(output_path):
                 os.remove(output_path)
             Path(_original_video_path(output_path)).unlink(missing_ok=True)
             if preview_active:
-                shutil.rmtree(WORK_PREVIEW_DIR / job_id, ignore_errors=True)
+                _cleanup_previews(job_id)
             cancelled_line = json.dumps({
                 "status": "cancelled",
                 "jobId": job_id,
@@ -367,6 +396,8 @@ def run_inference_stream(
             })
             progress_queue.put(cancelled_line)
         except Exception as e:
+            if preview_active:
+                _cleanup_previews(job_id)
             error_line = json.dumps({
                 "status": "failed",
                 "jobId": job_id,

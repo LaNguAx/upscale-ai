@@ -30,7 +30,7 @@ If you change behavior, structure, endpoints, env vars, schemas, commands, or wo
 | ai       | `WORK_RESULT_DIR`          | `../../storage/ai/results`         | Read in `server.py` (remote-mode results)          |
 | ai       | `HOST` / `PORT`            | `0.0.0.0` / `8000`                 | Read in `server.py`                                |
 | ai       | `PREVIEW_ENABLED`          | `true`                             | Read in `server.py`                                |
-| ai       | `PREVIEW_EVERY_N_FRAMES`   | `15`                               | Read in `server.py`                                |
+| ai       | `PREVIEW_EVERY_N_FRAMES`   | `2`                                | Read in `server.py` (flipbook playback stride)     |
 | ai       | `PREVIEW_MAX_WIDTH`        | `640`                              | Read in `server.py`                                |
 | ai       | `PREVIEW_JPEG_QUALITY`     | `80`                               | Read in `server.py`                                |
 | ai       | `WORK_PREVIEW_DIR`         | `../../storage/ai/previews`        | Read in `server.py` (preview frames)               |
