@@ -91,7 +91,7 @@ Each app commits `.env.development.example` / `.env.production.example`. Backend
 - frontend: `VITE_PORT`, `VITE_API_BASE_URL` (backend **origin**, no `/api` suffix)
 - ai: `CHECKPOINT_PATH`, `DEVICE`, `MAX_INPUT_HEIGHT`, `HOST`, `PORT`, `AI_INTERNAL_TOKEN`, `WORK_UPLOAD_DIR`, `WORK_RESULT_DIR`, `PREVIEW_ENABLED`, `PREVIEW_EVERY_N_FRAMES`, `PREVIEW_MAX_WIDTH`, `PREVIEW_JPEG_QUALITY`, `WORK_PREVIEW_DIR`
 
-For a two-server deployment set `AI_TRANSFER_MODE=remote`, point `AI_SERVICE_URL` at the GPU server's internal address, and set the **same** `AI_INTERNAL_TOKEN` on both the backend and the AI service. Keep the demo upload cap small (e.g. `MAX_FILE_SIZE_MB=20`). The concrete server addresses, domain, Nginx/PM2/SSL setup are handled by infrastructure tooling, not this repo.
+For a two-server deployment set `AI_TRANSFER_MODE=remote`, point `AI_SERVICE_URL` at the GPU server's internal address, and set the **same** `AI_INTERNAL_TOKEN` on both the backend and the AI service. Keep the upload cap bounded (recommended `MAX_FILE_SIZE_MB=100` — the AI loads all frames into RAM; Nginx's `client_max_body_size` must be at least the cap). The concrete server addresses, domain, Nginx/PM2/SSL setup are handled by infrastructure tooling, not this repo.
 
 ## The AI model
 
@@ -130,7 +130,7 @@ Operational guide for running the fine-tune on a temporary GPU environment (requ
 - Job state is in-memory; a backend restart loses all jobs. No DB persistence.
 - No automatic cleanup of old jobs or files (uploads, results, and AI work dirs grow until cleared manually). Cached preview frames are the exception — both servers delete them per job at terminal states.
 - Single-node disk storage per server (`storage/`, gitignored); there is no shared storage between the app and GPU servers — `remote` mode exists precisely because of this.
-- The recommended public-demo upload cap is small (`MAX_FILE_SIZE_MB=20`).
+- The recommended public upload cap is `MAX_FILE_SIZE_MB=100` — bounded because the AI loads all frames into RAM (duration/resolution drive memory more than file size; `MAX_INPUT_HEIGHT=480` bounds resolution). Oversized uploads return a friendly 413.
 - Deploy script builds the frontend but static hosting must be configured separately (see `deploy-upscale-ai.sh`).
 
 ## Deployment

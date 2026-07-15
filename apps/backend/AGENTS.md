@@ -24,7 +24,7 @@ NestJS 11 API on Express. Global prefix `/api`, port 3000 (`PORT`), Swagger at `
 - `src/middleware/request-id.middleware.ts` — `x-request-id`: echoes a safe incoming ID (`/^[A-Za-z0-9._-]{1,128}$/`) or generates a UUID; sets `req.id` and the response header.
 - `src/utils/env.validation.ts` — Zod schema for ALL env vars; startup fails on invalid env.
 - `src/consts/` — error titles, problem `type` URIs, HTTP status→title map used by the filter.
-- `test/app.e2e-spec.ts` + `test/preview.e2e-spec.ts` — e2e suites; unit specs live next to their sources in `src/` (see Testing).
+- `test/app.e2e-spec.ts` + `test/preview.e2e-spec.ts` + `test/upload-limit.e2e-spec.ts` — e2e suites; unit specs live next to their sources in `src/` (see Testing).
 
 ## Endpoints
 
@@ -61,7 +61,7 @@ States: `queued → processing → completed | failed | cancelled`. Terminal sta
 
 ## Env vars (`src/utils/env.validation.ts`)
 
-`NODE_ENV` (`development`), `PORT` (`3000`), `CORS_ORIGIN` (`*` → allow all; otherwise comma-separated exact origins), `AI_SERVICE_URL` (`http://localhost:8000`), `AI_TRANSFER_MODE` (`path` | `remote`, default `path`), `AI_INTERNAL_TOKEN` (default empty), `UPLOAD_DIR` (`../../storage/uploads`), `RESULT_DIR` (`../../storage/results`), `MAX_FILE_SIZE_MB` (`500`), `ALLOWED_VIDEO_EXTENSIONS` (`.mp4,.avi,.mkv,.mov,.wmv,.webm`), `PREVIEW_ENABLED` (`z.stringbool()`, default `true` — master switch for caching/serving AI preview frames), `PREVIEW_DIR` (`../../storage/previews`). Dirs resolve from `process.cwd()` (normally `apps/backend`) and are created on startup. Examples in `.env.development.example` / `.env.production.example`.
+`NODE_ENV` (`development`), `PORT` (`3000`), `CORS_ORIGIN` (`*` → allow all; otherwise comma-separated exact origins), `AI_SERVICE_URL` (`http://localhost:8000`), `AI_TRANSFER_MODE` (`path` | `remote`, default `path`), `AI_INTERNAL_TOKEN` (default empty), `UPLOAD_DIR` (`../../storage/uploads`), `RESULT_DIR` (`../../storage/results`), `MAX_FILE_SIZE_MB` (`500`; recommended prod cap `100` — the AI loads all frames into RAM, and any fronting Nginx needs `client_max_body_size` >= the cap), `ALLOWED_VIDEO_EXTENSIONS` (`.mp4,.avi,.mkv,.mov,.wmv,.webm`), `PREVIEW_ENABLED` (`z.stringbool()`, default `true` — master switch for caching/serving AI preview frames), `PREVIEW_DIR` (`../../storage/previews`). Dirs resolve from `process.cwd()` (normally `apps/backend`) and are created on startup. Examples in `.env.development.example` / `.env.production.example`.
 
 - `AI_TRANSFER_MODE` selects the backend→AI transport. `path` sends absolute filesystem paths to `/process` (backend and AI share a disk — local/dev). `remote` uploads the video to `/process-upload` and downloads the result, for two-server deployments (app server + GPU server) with **no shared storage**.
 - `AI_INTERNAL_TOKEN` is the shared secret for internal backend→AI calls. When non-empty, the backend sends `Authorization: Bearer <token>` to the AI's `/process-upload`, `/result`, `/cancel`, and `/preview/...` endpoints; it must match the AI service's `AI_INTERNAL_TOKEN`. Empty disables auth (local dev only). The token is never logged.
@@ -70,11 +70,12 @@ States: `queued → processing → completed | failed | cancelled`. Terminal sta
 
 - All exceptions → `HttpExceptionFilter` → RFC 7807 `{ type, title, status, instance, detail?, errors?, traceId? }` (`problemDetailsSchema` in `@repo/schemas/errors`). `traceId` comes from the request-id middleware.
 - `ZodValidationException` → 400 `/problems/validation-failed` (Zod issues included in dev only); serialization failures and unknown errors → 500 `/problems/internal-error` (sanitized in prod).
+- Upload rejections: an oversized file (Multer `LIMIT_FILE_SIZE` → Nest `PayloadTooLargeException`) becomes a **413** whose `detail` names the configured cap (`UPLOAD_TOO_LARGE_DETAIL(MAX_FILE_SIZE_MB)`); a disallowed extension is rejected by the `fileFilter` with an `UnsupportedMediaTypeException` → clean **415**.
 - DTOs never define shapes locally — always `createZodDto(schema)` from `@repo/schemas`; controllers use `@ZodResponse` for OpenAPI + response serialization.
 
 ## Testing
 
-- `pnpm --filter backend test:e2e` — boots the **real** `AppModule` via `configureApp`. `app.e2e-spec.ts` covers health, 404 ProblemDetails, request-id echo/generation, Swagger availability (dev) / absence (prod, via stubbed ConfigService), helmet headers; `preview.e2e-spec.ts` covers the preview endpoints' 404/400 validation paths (unknown jobs must 404 locally, without contacting the AI). **The AI service is not mocked and the upload/processing path is not exercised** — adding such tests requires stubbing `fetch` to `AI_SERVICE_URL`.
+- `pnpm --filter backend test:e2e` — boots the **real** `AppModule` via `configureApp`. `app.e2e-spec.ts` covers health, 404 ProblemDetails, request-id echo/generation, Swagger availability (dev) / absence (prod, via stubbed ConfigService), helmet headers; `preview.e2e-spec.ts` covers the preview endpoints' 404/400 validation paths (unknown jobs must 404 locally, without contacting the AI); `upload-limit.e2e-spec.ts` covers the Multer rejection paths (413 with the configured cap in `detail`, 415 for a disallowed extension, 400 for no file — all rejected before the controller, so no job is created). **The AI service is not mocked and the upload/processing path is not exercised** — adding such tests requires stubbing `fetch` to `AI_SERVICE_URL`.
 - `pnpm --filter backend test` — unit specs beside their sources: `env.validation.spec.ts`, `ai-client.service.spec.ts`, `preview-cache.service.spec.ts` (cache hit/miss, in-flight dedup, 404/502 mapping, terminal refusal, latest refetch/fallback, cleanup), `preview-path.util.spec.ts`, `preview-url.util.spec.ts`, `upload.service.spec.ts`.
 
 ## Gotchas
@@ -82,7 +83,6 @@ States: `queued → processing → completed | failed | cancelled`. Terminal sta
 - Jobs live only in memory: lost on restart, never cleaned up (disk files included). No queue — concurrent uploads hit the AI service concurrently. No auth or rate limiting.
 - Cached preview JPEGs under `PREVIEW_DIR/{jobId}/` are deleted when the job reaches a terminal state (`processJob`'s `finally` → `deleteJobPreviews`); orphans can remain only after a backend crash mid-job. Uploads/results still have no cleanup (known limitation).
 - `result.downloadUrl` is a relative path (`/api/upload/stream/{jobId}`); `outputFilename` is a display name (`{base}_enhanced_by_upscale{ext}`) — the file on disk is `{jobId}_enhanced{ext}`.
-- Multer's `fileFilter` rejects via plain `Error`, so a rejected extension may not produce a clean ProblemDetails.
 - Range parsing does not bounds-check `start`/`end` against the file size.
 
 ## Conventions

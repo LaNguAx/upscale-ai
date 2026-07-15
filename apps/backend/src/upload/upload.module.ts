@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, UnsupportedMediaTypeException } from '@nestjs/common';
 import { MulterModule } from '@nestjs/platform-express';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { diskStorage } from 'multer';
@@ -52,7 +52,15 @@ import type { Env } from '@/utils/env.validation';
             if (allowedExtensions.includes(ext)) {
               cb(null, true);
             } else {
-              cb(new Error(`File type ${ext} is not allowed`), false);
+              // A real HttpException passes through Nest's transformException
+              // untouched, so the filter renders a clean 415 (a plain Error
+              // would surface as an opaque 500).
+              cb(
+                new UnsupportedMediaTypeException(
+                  `File type ${ext || '(none)'} is not allowed. Allowed: ${allowedExtensions.join(', ')}`
+                ),
+                false
+              );
             }
           }
         };

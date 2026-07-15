@@ -135,7 +135,8 @@ This change is code + docs only. The following are deliberately NOT done here:
 1. App server (`10.10.248.133`, `upscale.cs.colman.ac.il`): Nginx reverse proxy,
    PM2 process management, SSL/TLS, firewall, storage dirs, production `.env`.
    Set `AI_TRANSFER_MODE=remote`, `AI_SERVICE_URL=http://<gpu-internal-ip>:8000`,
-   a strong `AI_INTERNAL_TOKEN`, and a small `MAX_FILE_SIZE_MB` (e.g. 20).
+   a strong `AI_INTERNAL_TOKEN`, and a bounded `MAX_FILE_SIZE_MB` (e.g. 100 —
+   Nginx's `client_max_body_size` must be >= the cap; its default is 1 MB).
 2. GPU server (`10.10.248.31`): Python env + checkpoint, run the AI service under
    a process manager on port 8000, set the **same** `AI_INTERNAL_TOKEN`, and
    `WORK_UPLOAD_DIR`/`WORK_RESULT_DIR`.
@@ -148,4 +149,4 @@ This change is code + docs only. The following are deliberately NOT done here:
 - Jobs are in-memory (lost on restart); no DB persistence.
 - No cleanup of old jobs/files (uploads, results, AI work dirs grow unbounded).
 - No shared storage between servers (the reason `remote` mode exists).
-- Recommended demo upload cap is 20MB.
+- Recommended public upload cap is 100 MB (the AI loads all frames into RAM, so keep a cap).

@@ -1,4 +1,10 @@
-import { Catch, HttpException, HttpStatus, Logger } from '@nestjs/common';
+import {
+  Catch,
+  HttpException,
+  HttpStatus,
+  Logger,
+  PayloadTooLargeException
+} from '@nestjs/common';
 import type { ArgumentsHost, ExceptionFilter } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ZodSerializationException, ZodValidationException } from 'nestjs-zod';
@@ -8,6 +14,7 @@ import type { Request, Response } from 'express';
 import {
   GENERIC_500_DETAIL,
   GENERIC_500_TITLE,
+  UPLOAD_TOO_LARGE_DETAIL,
   VALIDATION_FAILED_DEV_DETAIL,
   VALIDATION_FAILED_PROD_DETAIL,
   VALIDATION_FAILED_TITLE,
@@ -31,10 +38,14 @@ const SAFE_STRINGIFY_MAX_LENGTH = 2048;
 export class HttpExceptionFilter implements ExceptionFilter {
   private readonly logger = new Logger(HttpExceptionFilter.name);
   private readonly isProduction: boolean;
+  private readonly maxFileSizeMb: number;
 
   constructor(configService: ConfigService<Env, true>) {
     this.isProduction =
       configService.get('NODE_ENV', { infer: true }) === 'production';
+    this.maxFileSizeMb = configService.get('MAX_FILE_SIZE_MB', {
+      infer: true
+    });
   }
 
   catch(exception: unknown, host: ArgumentsHost): void {
@@ -98,6 +109,12 @@ export class HttpExceptionFilter implements ExceptionFilter {
       };
       if (status >= 500) {
         problem.detail = this.isProduction ? GENERIC_500_DETAIL : detail;
+      } else if (exception instanceof PayloadTooLargeException) {
+        // Multer's LIMIT_FILE_SIZE surfaces as this exception with an
+        // unhelpful "File too large" — tell the user the actual cap. (The
+        // upload cap is the only 413 source; a future non-upload 413 would
+        // inherit this message, which is acceptable.)
+        problem.detail = UPLOAD_TOO_LARGE_DETAIL(this.maxFileSizeMb);
       } else if (detail !== undefined) {
         problem.detail = detail;
       }
