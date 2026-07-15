@@ -221,14 +221,31 @@ def _cleanup_previews(job_id: str) -> None:
     shutil.rmtree(WORK_PREVIEW_DIR / job_id, ignore_errors=True)
 
 
-def _transcode_to_h264(src: str, dest: str, scale: tuple[int, int] | None = None) -> bool:
+def _transcode_to_h264(
+    src: str,
+    dest: str,
+    scale: tuple[int, int] | None = None,
+    audio_source: str | None = None,
+) -> bool:
     """Re-encode a video to browser-safe H.264/yuv420p MP4 (atomic replace).
 
-    Returns True on success; on failure logs a warning and leaves ``dest``
-    untouched. Same proven args as the engine's OpenCV decode fallback.
+    When ``audio_source`` is given, its first audio stream is muxed into the
+    output as AAC (optional-mapped, so inputs without audio still succeed;
+    ``-shortest`` handles audio/video length mismatch). Returns True on
+    success; on failure logs a warning and leaves ``dest`` untouched. Same
+    proven video args as the engine's OpenCV decode fallback.
     """
     tmp_dest = f"{dest}.transcode.tmp.mp4"
-    command = ["ffmpeg", "-y", "-i", src, "-an", "-c:v", "libx264", "-pix_fmt", "yuv420p"]
+    command = ["ffmpeg", "-y", "-i", src]
+    if audio_source is not None:
+        command += [
+            "-i", audio_source,
+            "-map", "0:v:0", "-map", "1:a:0?",
+            "-c:a", "aac", "-shortest",
+        ]
+    else:
+        command += ["-an"]
+    command += ["-c:v", "libx264", "-pix_fmt", "yuv420p"]
     if scale is not None:
         command += ["-vf", f"scale={scale[0]}:{scale[1]}"]
     command += ["-movflags", "+faststart", tmp_dest]
@@ -262,12 +279,15 @@ def _finalize_outputs(
     """Make the browser-facing artifacts playable everywhere.
 
     1. Re-encodes the raw OpenCV ``mp4v`` output to H.264 in place (browsers
-       cannot decode mp4v). On failure the raw file is kept (degraded).
+       cannot decode mp4v), muxing in the original input's audio track (the
+       OpenCV writer is video-only). On failure the raw file is kept
+       (degraded).
     2. Encodes a browser-safe original-comparison video at the inference input
        resolution (``{jobId}_original.mp4``). Best-effort — the job completes
-       without it.
+       without it. Stays audio-free: it plays muted under the comparison
+       divider, and audio there would double-play against the enhanced video.
     """
-    if _transcode_to_h264(output_path, output_path):
+    if _transcode_to_h264(output_path, output_path, audio_source=input_path):
         logger.info(f"Job {job_id}: enhanced output re-encoded to H.264")
 
     original_path = _original_video_path(output_path)
