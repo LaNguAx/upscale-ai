@@ -25,9 +25,9 @@ packages/
 
 1. The frontend uploads a video (`POST /api/upload`, multipart, XHR progress) and receives a `jobId`.
 2. The backend stores the file on disk (Multer), tracks the job in memory, and hands it to the AI service, consuming an NDJSON progress stream. The transport depends on `AI_TRANSFER_MODE` (see below).
-3. The AI service runs BasicVSR + SPyNet (V3 checkpoint, 4x scale) over the video frames, sampling original+enhanced preview JPEG pairs as it goes (first frame, then every `PREVIEW_EVERY_N_FRAMES`th) and finishing with an ffmpeg re-encode to browser-safe H.264 (plus a small original-comparison video). The backend saves the enhanced output to `storage/results` (downloading it from the AI service in `remote` mode) and downloads each sampled preview over HTTP to `storage/previews` — in **both** transports, since there's no shared disk to rely on.
-4. The frontend follows progress over SSE (`/api/upload/events/:jobId`, with polling fallback), rendering a live before/after comparison from the sampled frame pairs (`GET /api/upload/preview/:jobId/:frameIndex` + `…/original`) while the job runs; on completion the same player switches to the enhanced video (`/api/upload/stream/:jobId`, HTTP Range) with the synced original comparison underneath (`…/original`) and custom play/seek/volume/fullscreen controls. Progressive previews are still-frame snapshots, not a live video stream, and the final enhanced MP4 is only ever available after completion.
-5. Jobs can be cancelled end-to-end (`POST /api/upload/cancel/:jobId` bridges to the AI service, which also deletes its cached preview frames for that job).
+3. The AI service runs BasicVSR + SPyNet (V3 checkpoint, 4x scale) over the video frames, sampling original+enhanced preview JPEG pairs as it goes (first frame, then every `PREVIEW_EVERY_N_FRAMES`th — default 2, dense enough for playback — with `fps`/`stride` pacing metadata on each announcement) and finishing with an ffmpeg re-encode to browser-safe H.264 (plus a small original-comparison video). The backend saves the enhanced output to `storage/results` (downloading it from the AI service in `remote` mode) and proxies preview frames cache-through: `GET /api/upload/preview/...` serves from `storage/previews` or fetches the exact frame from the AI over HTTP on demand — in **both** transports, since there's no shared disk to rely on.
+4. The frontend follows progress over SSE (`/api/upload/events/:jobId`, with polling fallback) and plays a buffered "flipbook" before/after comparison from the sampled frame pairs (`GET /api/upload/preview/:jobId/:frameIndex` + `…/original`) while the job runs — like a delayed live broadcast: it buffers a few seconds of frames, plays them as motion at the source pace while staying safely behind the newest frame, and holds with a "Buffering preview…" state when it catches up. On completion the same player switches seamlessly to the enhanced video (`/api/upload/stream/:jobId`, HTTP Range) with the synced original comparison underneath (`…/original`) and custom play/seek/volume/fullscreen controls. The final enhanced MP4 is only ever available after completion.
+5. Jobs can be cancelled end-to-end (`POST /api/upload/cancel/:jobId` bridges to the AI service). Both sides delete their cached preview frames for a job once it reaches any terminal state.
 
 ### Single-server vs two-server (`AI_TRANSFER_MODE`)
 
@@ -128,7 +128,7 @@ Operational guide for running the fine-tune on a temporary GPU environment (requ
 ## Known limitations
 
 - Job state is in-memory; a backend restart loses all jobs. No DB persistence.
-- No automatic cleanup of old jobs or files (uploads, results, cached preview frames, and AI work dirs grow until cleared manually).
+- No automatic cleanup of old jobs or files (uploads, results, and AI work dirs grow until cleared manually). Cached preview frames are the exception — both servers delete them per job at terminal states.
 - Single-node disk storage per server (`storage/`, gitignored); there is no shared storage between the app and GPU servers — `remote` mode exists precisely because of this.
 - The recommended public-demo upload cap is small (`MAX_FILE_SIZE_MB=20`).
 - Deploy script builds the frontend but static hosting must be configured separately (see `deploy-upscale-ai.sh`).
