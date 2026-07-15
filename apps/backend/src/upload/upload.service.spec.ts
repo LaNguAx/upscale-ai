@@ -54,6 +54,18 @@ describe('UploadService preview propagation', () => {
     });
   });
 
+  it('passes fps and stride through to the public preview', () => {
+    const service = makeService();
+    const jobId = createJob(service);
+    service.updateJob(jobId, 'processing', 10);
+
+    service.setJobPreview(jobId, { frameIndex: 42, fps: 29.97, stride: 2 });
+
+    const preview = service.getJobStatus(jobId).preview;
+    expect(preview?.fps).toBe(29.97);
+    expect(preview?.stride).toBe(2);
+  });
+
   it('exposes the original frame URL only when the pair was cached', () => {
     const service = makeService();
     const jobId = createJob(service);

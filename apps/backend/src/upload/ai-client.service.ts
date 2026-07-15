@@ -37,6 +37,17 @@ const AI_HEALTH_TIMEOUT_MS = 5000;
 const PROCESS_SCALE = 4;
 
 /**
+ * Thrown when the AI service has no such preview frame (404) — distinguishable
+ * from transport failures so the preview proxy can map it to a public 404.
+ */
+export class AiPreviewNotFoundError extends Error {
+  constructor() {
+    super('AI service has no such preview frame.');
+    this.name = 'AiPreviewNotFoundError';
+  }
+}
+
+/**
  * Owns all HTTP communication with the Python AI service. Supports two
  * transports selected by `AI_TRANSFER_MODE`:
  * - `path`: `POST /process` with absolute filesystem paths (same machine).
@@ -189,6 +200,9 @@ export class AiClientService {
       throw new Error('Failed to download preview from AI service.');
     }
 
+    if (response.status === 404) {
+      throw new AiPreviewNotFoundError();
+    }
     if (!response.ok) {
       throw new Error(
         `AI preview download failed (${String(response.status)} ${response.statusText})`

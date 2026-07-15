@@ -2,7 +2,10 @@ import type { ConfigService } from '@nestjs/config';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { AiClientService } from '@/upload/ai-client.service';
+import {
+  AiClientService,
+  AiPreviewNotFoundError
+} from '@/upload/ai-client.service';
 import type { AIProcessUpdate } from '@/upload/ai-protocol.types';
 import type { Env } from '@/utils/env.validation';
 
@@ -168,6 +171,32 @@ describe('AiClientService', () => {
         signal: new AbortController().signal
       })
     ).rejects.toThrow(/AI result download failed/);
+  });
+
+  it('throws AiPreviewNotFoundError when the AI has no such preview frame', async () => {
+    fetchSpy.mockResolvedValue(new Response('missing', { status: 404 }));
+
+    const client = makeClient();
+    await expect(
+      client.downloadPreview({
+        downloadPath: '/preview/j/42',
+        destPath: path.join(os.tmpdir(), 'never-written.jpg'),
+        signal: new AbortController().signal
+      })
+    ).rejects.toBeInstanceOf(AiPreviewNotFoundError);
+  });
+
+  it('throws a generic error for non-404 preview download failures', async () => {
+    fetchSpy.mockResolvedValue(new Response('boom', { status: 500 }));
+
+    const client = makeClient();
+    await expect(
+      client.downloadPreview({
+        downloadPath: '/preview/j/42',
+        destPath: path.join(os.tmpdir(), 'never-written.jpg'),
+        signal: new AbortController().signal
+      })
+    ).rejects.toThrow(/AI preview download failed/);
   });
 
   it('cancels with a token header and the jobId body when configured', async () => {

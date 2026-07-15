@@ -9,6 +9,7 @@ import { UploadController } from '@/upload/upload.controller';
 import { UploadService } from '@/upload/upload.service';
 import { ProcessingService } from '@/upload/processing.service';
 import { AiClientService } from '@/upload/ai-client.service';
+import { PreviewCacheService } from '@/upload/preview-cache.service';
 import type { Env } from '@/utils/env.validation';
 
 @Module({
@@ -59,6 +60,11 @@ import type { Env } from '@/utils/env.validation';
     })
   ],
   controllers: [UploadController],
-  providers: [UploadService, ProcessingService, AiClientService]
+  providers: [
+    UploadService,
+    ProcessingService,
+    AiClientService,
+    PreviewCacheService
+  ]
 })
 export class UploadModule {}

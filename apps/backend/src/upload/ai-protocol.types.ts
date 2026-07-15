@@ -28,6 +28,10 @@ export interface AIPreviewUpdate {
   downloadUrl: string;
   /** Matching original (input) frame, e.g. `/preview/{jobId}/{frameIndex}_in`. */
   originalDownloadUrl?: string;
+  /** Source-video frames per second — additive, for flipbook playback pacing. */
+  fps?: number;
+  /** Sampling stride: a preview frame exists every `stride` source frames. */
+  stride?: number;
 }
 
 /** One NDJSON progress line emitted during inference (no `jobId`). */

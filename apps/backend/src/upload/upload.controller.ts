@@ -27,6 +27,7 @@ import type {
 } from '@repo/schemas/upload';
 import { UploadService } from '@/upload/upload.service';
 import { ProcessingService } from '@/upload/processing.service';
+import { PreviewCacheService } from '@/upload/preview-cache.service';
 import {
   LATEST_FRAME_KEY,
   ORIGINAL_KEY_SUFFIX
@@ -57,7 +58,8 @@ export class UploadController {
 
   constructor(
     private readonly uploadService: UploadService,
-    private readonly processingService: ProcessingService
+    private readonly processingService: ProcessingService,
+    private readonly previewCache: PreviewCacheService
   ) {}
 
   @Post()
@@ -203,7 +205,7 @@ export class UploadController {
   previewLatestOriginal(
     @Param() params: PreviewLatestParamsDto,
     @Res({ passthrough: true }) res: Response
-  ): StreamableFile {
+  ): Promise<StreamableFile> {
     return this.servePreviewFile(res, {
       jobId: params.jobId,
       frameKey: `${LATEST_FRAME_KEY}${ORIGINAL_KEY_SUFFIX}`,
@@ -216,7 +218,7 @@ export class UploadController {
   previewLatest(
     @Param() params: PreviewLatestParamsDto,
     @Res({ passthrough: true }) res: Response
-  ): StreamableFile {
+  ): Promise<StreamableFile> {
     return this.servePreviewFile(res, {
       jobId: params.jobId,
       frameKey: LATEST_FRAME_KEY,
@@ -230,7 +232,7 @@ export class UploadController {
   previewFrameOriginal(
     @Param() params: PreviewFrameParamsDto,
     @Res({ passthrough: true }) res: Response
-  ): StreamableFile {
+  ): Promise<StreamableFile> {
     return this.servePreviewFile(res, {
       jobId: params.jobId,
       frameKey: `${params.frameIndex}${ORIGINAL_KEY_SUFFIX}`,
@@ -244,7 +246,7 @@ export class UploadController {
   previewFrame(
     @Param() params: PreviewFrameParamsDto,
     @Res({ passthrough: true }) res: Response
-  ): StreamableFile {
+  ): Promise<StreamableFile> {
     return this.servePreviewFile(res, {
       jobId: params.jobId,
       frameKey: params.frameIndex,
@@ -252,11 +254,12 @@ export class UploadController {
     });
   }
 
-  private servePreviewFile(
+  /** Cache-through: serves from disk or fetches the frame from the AI. */
+  private async servePreviewFile(
     res: Response,
     args: { jobId: string; frameKey: string; cacheControl: string }
-  ): StreamableFile {
-    const { filePath } = this.uploadService.getPreviewStreamInfo(
+  ): Promise<StreamableFile> {
+    const filePath = await this.previewCache.getPreviewFile(
       args.jobId,
       args.frameKey
     );

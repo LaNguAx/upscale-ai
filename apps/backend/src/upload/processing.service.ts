@@ -5,21 +5,19 @@ import * as path from 'node:path';
 import { isTerminalJobState, type JobState } from '@repo/schemas/jobs';
 import { AiClientService } from '@/upload/ai-client.service';
 import { UploadService } from '@/upload/upload.service';
-import {
-  LATEST_FRAME_KEY,
-  ORIGINAL_KEY_SUFFIX,
-  resolvePreviewFilePath
-} from '@/upload/preview-path.util';
+import { PreviewCacheService } from '@/upload/preview-cache.service';
 import type {
   AIPreviewUpdate,
   AIProcessUpdate
 } from '@/upload/ai-protocol.types';
 import type { Env } from '@/utils/env.validation';
 
+/** Frame indices safe to embed in preview paths (mirrors the URL grammar). */
+const FRAME_INDEX_PATTERN = /^\d{1,9}$/;
+
 interface ActiveJob {
   abortController: AbortController;
   outputPath: string;
-  previewDownloadInFlight: boolean;
 }
 
 type UpdateOutcome = 'continue' | 'done';
@@ -29,12 +27,12 @@ export class ProcessingService {
   private readonly logger = new Logger(ProcessingService.name);
   private readonly resultDir: string;
   private readonly previewEnabled: boolean;
-  private readonly previewDir: string;
   private readonly activeJobs = new Map<string, ActiveJob>();
 
   constructor(
     private readonly uploadService: UploadService,
     private readonly aiClient: AiClientService,
+    private readonly previewCache: PreviewCacheService,
     private readonly configService: ConfigService<Env, true>
   ) {
     this.resultDir = path.resolve(
@@ -44,10 +42,6 @@ export class ProcessingService {
     this.previewEnabled = this.configService.get('PREVIEW_ENABLED', {
       infer: true
     });
-    this.previewDir = path.resolve(
-      process.cwd(),
-      this.configService.get('PREVIEW_DIR', { infer: true })
-    );
   }
 
   async processJob(jobId: string): Promise<void> {
@@ -82,8 +76,7 @@ export class ProcessingService {
       const abortController = new AbortController();
       this.activeJobs.set(jobId, {
         abortController,
-        outputPath,
-        previewDownloadInFlight: false
+        outputPath
       });
 
       await this.aiClient.checkHealth(abortController.signal);
@@ -105,6 +98,12 @@ export class ProcessingService {
       }
     } finally {
       this.activeJobs.delete(jobId);
+      // Cached preview frames are useless once the job is terminal — this
+      // covers completed (after the result is secured), failed, and cancelled.
+      const state = this.uploadService.getJobRecord(jobId)?.state;
+      if (state !== undefined && isTerminalJobState(state)) {
+        void this.previewCache.deleteJobPreviews(jobId);
+      }
     }
   }
 
@@ -258,104 +257,27 @@ export class ProcessingService {
   }
 
   /**
-   * Fire-and-forget preview capture: never awaited by the NDJSON loop, never
-   * fails the job. If a download is already in flight for this job, the new
-   * preview is skipped (latest-wins; no backlog).
+   * Records the newest sampled preview's metadata and announces it over SSE.
+   * Nothing is downloaded here — frames are pulled lazily by the cache-through
+   * preview proxy (`PreviewCacheService`) when the client requests them, so
+   * no announced frame is ever dropped.
    */
   private capturePreview(jobId: string, preview: AIPreviewUpdate): void {
     if (!this.previewEnabled) return;
-    const activeJob = this.activeJobs.get(jobId);
-    if (!activeJob || activeJob.previewDownloadInFlight) return;
-
-    const destPath = resolvePreviewFilePath(
-      this.previewDir,
-      jobId,
-      String(preview.frameIndex)
-    );
-    const latestPath = resolvePreviewFilePath(
-      this.previewDir,
-      jobId,
-      LATEST_FRAME_KEY
-    );
-    if (!destPath || !latestPath) {
-      this.logger.warn(
-        `Job ${jobId}: ignoring preview with unsafe frame index`
-      );
+    if (!FRAME_INDEX_PATTERN.test(String(preview.frameIndex))) {
+      this.logger.warn(`Job ${jobId}: ignoring preview with unsafe frame index`);
       return;
-    }
-
-    activeJob.previewDownloadInFlight = true;
-    this.downloadAndPublishPreview(jobId, preview, { destPath, latestPath })
-      .catch((error: unknown) => {
-        this.logger.warn(
-          `Job ${jobId}: preview download failed — ${error instanceof Error ? error.message : 'unknown error'}`
-        );
-      })
-      .finally(() => {
-        const job = this.activeJobs.get(jobId);
-        if (job) job.previewDownloadInFlight = false;
-      });
-  }
-
-  private async downloadAndPublishPreview(
-    jobId: string,
-    preview: AIPreviewUpdate,
-    paths: { destPath: string; latestPath: string }
-  ): Promise<void> {
-    const activeJob = this.activeJobs.get(jobId);
-    if (!activeJob || this.isCancelled(jobId)) return;
-    const signal = activeJob.abortController.signal;
-
-    await fs.promises.mkdir(path.dirname(paths.destPath), { recursive: true });
-    await this.aiClient.downloadPreview({
-      downloadPath: preview.downloadUrl,
-      destPath: paths.destPath,
-      signal
-    });
-    await this.publishLatest(paths.destPath, paths.latestPath);
-
-    // Matching original (input) frame — best-effort; the enhanced preview
-    // still ships without it.
-    let hasOriginal = false;
-    const originalDest = resolvePreviewFilePath(
-      this.previewDir,
-      jobId,
-      `${String(preview.frameIndex)}${ORIGINAL_KEY_SUFFIX}`
-    );
-    const originalLatest = resolvePreviewFilePath(
-      this.previewDir,
-      jobId,
-      `${LATEST_FRAME_KEY}${ORIGINAL_KEY_SUFFIX}`
-    );
-    if (preview.originalDownloadUrl && originalDest && originalLatest) {
-      try {
-        await this.aiClient.downloadPreview({
-          downloadPath: preview.originalDownloadUrl,
-          destPath: originalDest,
-          signal
-        });
-        await this.publishLatest(originalDest, originalLatest);
-        hasOriginal = true;
-      } catch (error) {
-        this.logger.warn(
-          `Job ${jobId}: original preview frame download failed — ${error instanceof Error ? error.message : 'Unknown error'}`
-        );
-      }
     }
 
     this.uploadService.setJobPreview(jobId, {
       frameIndex: preview.frameIndex,
-      hasOriginal,
+      // Announced by the AI; the proxy fetches it lazily on first request.
+      hasOriginal: preview.originalDownloadUrl !== undefined,
       ...(preview.width !== undefined ? { width: preview.width } : {}),
-      ...(preview.height !== undefined ? { height: preview.height } : {})
+      ...(preview.height !== undefined ? { height: preview.height } : {}),
+      ...(preview.fps !== undefined ? { fps: preview.fps } : {}),
+      ...(preview.stride !== undefined ? { stride: preview.stride } : {})
     });
-  }
-
-  /** Atomic latest.jpg publish: copy to a temp name, then rename over it. */
-  private async publishLatest(srcPath: string, latestPath: string): Promise<void> {
-    const tmpLatest = `${latestPath}.tmp`;
-    await fs.promises.copyFile(srcPath, tmpLatest);
-    await fs.promises.rename(tmpLatest, latestPath);
   }
 
   private isCancelled(jobId: string): boolean {
