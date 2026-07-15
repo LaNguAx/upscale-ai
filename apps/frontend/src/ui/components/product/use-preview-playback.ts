@@ -6,10 +6,15 @@ import {
 import type { JobPreview } from '@repo/schemas/jobs';
 import { buildApiUrl } from '@/config/api';
 
-/** Seconds of playable runway required before starting/resuming playback. */
-const BUFFER_TARGET_SECONDS = 3;
+/**
+ * Seconds of playable runway required before starting/resuming playback.
+ * Together with SAFETY_LAG_SECONDS this sets the minimum content length that
+ * can play *during* processing (~3 s) — shorter clips simply drain their
+ * buffered frames at completion, right before the video handoff.
+ */
+const BUFFER_TARGET_SECONDS = 2;
 /** Never play closer than this to the newest announced frame. */
-const SAFETY_LAG_SECONDS = 2;
+const SAFETY_LAG_SECONDS = 1;
 /** Maximum concurrent frame-pair downloads. */
 const PREFETCH_CONCURRENCY = 3;
 /** How far ahead of the playhead to prefetch — keeps delivery self-pacing. */
