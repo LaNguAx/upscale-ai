@@ -1,25 +1,18 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { Maximize, Pause, Play, Volume2, VolumeX } from 'lucide-react';
 import {
-  UPLOAD_PREVIEW_FRAME_ENDPOINT,
-  UPLOAD_PREVIEW_ORIGINAL_FRAME_ENDPOINT,
   UPLOAD_STREAM_ENDPOINT,
   UPLOAD_STREAM_ORIGINAL_ENDPOINT
 } from '@repo/consts/upload';
 import type { JobPreview } from '@repo/schemas/jobs';
 import { useGetJobResultQuery } from '@/store/api/upscale.api';
 import { buildApiUrl } from '@/config/api';
+import { usePreviewPlayback } from './use-preview-playback';
 
 interface ComparisonPlayerProps {
   jobId: string;
   phase: 'processing' | 'completed';
   preview: JobPreview | null;
-}
-
-interface DisplayedPair {
-  frameIndex: number;
-  enhancedUrl: string;
-  originalUrl: string | null;
 }
 
 function formatTimecode(seconds: number): string {
@@ -29,33 +22,20 @@ function formatTimecode(seconds: number): string {
   return `${String(mins)}:${String(secs).padStart(2, '0')}`;
 }
 
-function loadImage(src: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const image = new Image();
-    image.onload = () => {
-      resolve();
-    };
-    image.onerror = () => {
-      reject(new Error(`Failed to load ${src}`));
-    };
-    image.src = src;
-  });
-}
-
 const MEDIA_LAYER_CLASS = 'absolute inset-0 size-full object-contain';
 const SYNC_DRIFT_SECONDS = 0.2;
 
 /**
  * One player for the whole job lifecycle — no component swap on completion:
- * - processing: pixel-aligned original/enhanced JPEG pair (same frame index)
- *   split by a draggable divider, preloaded before swapping to avoid flicker;
+ * - processing: buffered "flipbook" playback of the sampled original/enhanced
+ *   JPEG pairs (see `usePreviewPlayback`), split by a draggable divider, with
+ *   a "Buffering preview…" hold before start and on underrun;
  * - completed: the H.264 enhanced video with custom controls (play/seek/
  *   volume/fullscreen), the original comparison video synced underneath.
  * Degrades to enhanced-only whenever an original layer is unavailable.
  */
 export function ComparisonPlayer({ jobId, phase, preview }: ComparisonPlayerProps) {
   const [sliderPercent, setSliderPercent] = useState(50);
-  const [displayedPair, setDisplayedPair] = useState<DisplayedPair | null>(null);
   const [videoReady, setVideoReady] = useState(false);
   const [playing, setPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -78,41 +58,12 @@ export function ComparisonPlayer({ jobId, phase, preview }: ComparisonPlayerProp
       ? buildApiUrl(UPLOAD_STREAM_ORIGINAL_ENDPOINT, { jobId })
       : null;
 
-  // Preload each sampled frame pair and swap only once both images decoded.
-  useEffect(() => {
-    if (!preview) return;
-    const frame = String(preview.frameIndex);
-    const enhancedUrl = buildApiUrl(UPLOAD_PREVIEW_FRAME_ENDPOINT, {
-      jobId,
-      frameIndex: frame
-    });
-    const originalUrl = preview.originalImageUrl
-      ? buildApiUrl(UPLOAD_PREVIEW_ORIGINAL_FRAME_ENDPOINT, {
-          jobId,
-          frameIndex: frame
-        })
-      : null;
-
-    let stale = false;
-    const loads = [loadImage(enhancedUrl)];
-    if (originalUrl) loads.push(loadImage(originalUrl));
-    Promise.all(loads)
-      .then(() => {
-        if (!stale) {
-          setDisplayedPair({
-            frameIndex: preview.frameIndex,
-            enhancedUrl,
-            originalUrl
-          });
-        }
-      })
-      .catch(() => {
-        // Keep the previous pair; the next sampled frame self-heals.
-      });
-    return () => {
-      stale = true;
-    };
-  }, [preview, jobId]);
+  const { currentFrame, isBuffering } = usePreviewPlayback({
+    jobId,
+    phase,
+    preview
+  });
+  const stillOriginalUrl = currentFrame?.originalUrl ?? null;
 
   const syncOriginal = useCallback(() => {
     const enhanced = enhancedRef.current;
@@ -153,7 +104,7 @@ export function ComparisonPlayer({ jobId, phase, preview }: ComparisonPlayerProp
 
   const showStills = phase === 'processing' || !videoReady;
   const hasComparison = showStills
-    ? Boolean(displayedPair?.originalUrl)
+    ? Boolean(stillOriginalUrl)
     : Boolean(originalVideoUrl);
   const clipStyle = hasComparison
     ? { clipPath: `inset(0 0 0 ${String(sliderPercent)}%)` }
@@ -227,19 +178,19 @@ export function ComparisonPlayer({ jobId, phase, preview }: ComparisonPlayerProp
           </>
         )}
 
-        {showStills && displayedPair && (
+        {showStills && currentFrame && (
           <>
-            {displayedPair.originalUrl && (
+            {stillOriginalUrl && (
               <img
-                src={displayedPair.originalUrl}
+                src={stillOriginalUrl}
                 alt="Original frame"
                 draggable={false}
                 className={MEDIA_LAYER_CLASS}
               />
             )}
             <img
-              src={displayedPair.enhancedUrl}
-              alt={`Enhanced preview, frame ${String(displayedPair.frameIndex)}`}
+              src={currentFrame.enhancedUrl}
+              alt={`Enhanced preview, frame ${String(currentFrame.frameIndex)}`}
               draggable={false}
               className={MEDIA_LAYER_CLASS}
               style={clipStyle}
@@ -247,10 +198,16 @@ export function ComparisonPlayer({ jobId, phase, preview }: ComparisonPlayerProp
           </>
         )}
 
-        {showStills && !displayedPair && (
+        {showStills && !currentFrame && (
           <div className="absolute inset-0 flex items-center justify-center text-sm text-muted-foreground">
             Preparing first enhanced preview…
           </div>
+        )}
+
+        {phase === 'processing' && currentFrame && isBuffering && (
+          <span className="absolute bottom-2 left-1/2 -translate-x-1/2 rounded bg-background/80 px-2 py-0.5 text-xs font-medium text-muted-foreground">
+            Buffering preview…
+          </span>
         )}
 
         {hasComparison && (
@@ -353,9 +310,9 @@ export function ComparisonPlayer({ jobId, phase, preview }: ComparisonPlayerProp
         )}
       </div>
 
-      {phase === 'processing' && displayedPair && (
+      {phase === 'processing' && currentFrame && (
         <p className="text-xs text-muted-foreground">
-          Latest enhanced frame: {displayedPair.frameIndex}
+          Previewing enhanced frame: {currentFrame.frameIndex}
         </p>
       )}
     </div>

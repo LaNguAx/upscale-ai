@@ -17,7 +17,6 @@ import {
   type JobUpdate
 } from '@repo/schemas/jobs';
 import type { JobResult, UploadResponse } from '@repo/schemas/upload';
-import { resolvePreviewFilePath } from '@/upload/preview-path.util';
 import type { Env } from '@/utils/env.validation';
 
 /** Internal preview metadata; the public URLs are derived on emission. */
@@ -25,8 +24,12 @@ export interface JobPreviewMetadata {
   frameIndex: number;
   width?: number;
   height?: number;
-  /** True when the matching original (input) frame was cached too. */
+  /** True when the AI announced a matching original (input) frame. */
   hasOriginal?: boolean;
+  /** Source-video frames per second — lets the client pace flipbook playback. */
+  fps?: number;
+  /** Sampling stride: a preview frame exists every `stride` source frames. */
+  stride?: number;
 }
 
 interface JobRecord {
@@ -103,7 +106,9 @@ export class UploadService {
         ? `${frameBase}/original`
         : undefined,
       width: job.preview.width,
-      height: job.preview.height
+      height: job.preview.height,
+      fps: job.preview.fps,
+      stride: job.preview.stride
     };
   }
 
@@ -221,19 +226,6 @@ export class UploadService {
       filePath: job.originalComparisonPath,
       filename: `${job.jobId}_original.mp4`
     };
-  }
-
-  getPreviewStreamInfo(jobId: string, frameKey: string): { filePath: string } {
-    const job = this.jobs.get(jobId);
-    if (!job) {
-      throw new NotFoundException(`Job ${jobId} not found`);
-    }
-
-    const filePath = resolvePreviewFilePath(this.previewDir, jobId, frameKey);
-    if (!filePath || !fs.existsSync(filePath)) {
-      throw new NotFoundException('Preview not found');
-    }
-    return { filePath };
   }
 
   getJobRecord(jobId: string): JobRecord | undefined {

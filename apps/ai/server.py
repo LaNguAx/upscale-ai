@@ -85,7 +85,7 @@ def _env_flag(name: str, default: str = "true") -> bool:
 
 # Progressive preview generation (sampled enhanced JPEG frames during inference).
 PREVIEW_ENABLED = _env_flag("PREVIEW_ENABLED")
-PREVIEW_EVERY_N_FRAMES = max(1, int(os.environ.get("PREVIEW_EVERY_N_FRAMES", "15")))
+PREVIEW_EVERY_N_FRAMES = max(1, int(os.environ.get("PREVIEW_EVERY_N_FRAMES", "2")))
 PREVIEW_MAX_WIDTH = int(os.environ.get("PREVIEW_MAX_WIDTH", "640"))
 PREVIEW_JPEG_QUALITY = int(os.environ.get("PREVIEW_JPEG_QUALITY", "80"))
 WORK_PREVIEW_DIR = _resolve_work_dir(
@@ -200,14 +200,52 @@ def _write_preview_files(
     return width, height
 
 
-def _transcode_to_h264(src: str, dest: str, scale: tuple[int, int] | None = None) -> bool:
+def _probe_fps(input_path: str) -> float:
+    """Best-effort source-fps probe for preview pacing (never raises).
+
+    The engine also reads fps, but only returns it after inference finishes —
+    preview lines are emitted during inference, so the server probes it itself
+    (same 30.0 fallback the engine uses for broken metadata).
+    """
+    try:
+        cap = cv2.VideoCapture(input_path)
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        cap.release()
+    except Exception:
+        fps = 0.0
+    return fps if fps and fps > 0 else 30.0
+
+
+def _cleanup_previews(job_id: str) -> None:
+    """Delete a job's cached preview frames — useless once the job is terminal."""
+    shutil.rmtree(WORK_PREVIEW_DIR / job_id, ignore_errors=True)
+
+
+def _transcode_to_h264(
+    src: str,
+    dest: str,
+    scale: tuple[int, int] | None = None,
+    audio_source: str | None = None,
+) -> bool:
     """Re-encode a video to browser-safe H.264/yuv420p MP4 (atomic replace).
 
-    Returns True on success; on failure logs a warning and leaves ``dest``
-    untouched. Same proven args as the engine's OpenCV decode fallback.
+    When ``audio_source`` is given, its first audio stream is muxed into the
+    output as AAC (optional-mapped, so inputs without audio still succeed;
+    ``-shortest`` handles audio/video length mismatch). Returns True on
+    success; on failure logs a warning and leaves ``dest`` untouched. Same
+    proven video args as the engine's OpenCV decode fallback.
     """
     tmp_dest = f"{dest}.transcode.tmp.mp4"
-    command = ["ffmpeg", "-y", "-i", src, "-an", "-c:v", "libx264", "-pix_fmt", "yuv420p"]
+    command = ["ffmpeg", "-y", "-i", src]
+    if audio_source is not None:
+        command += [
+            "-i", audio_source,
+            "-map", "0:v:0", "-map", "1:a:0?",
+            "-c:a", "aac", "-shortest",
+        ]
+    else:
+        command += ["-an"]
+    command += ["-c:v", "libx264", "-pix_fmt", "yuv420p"]
     if scale is not None:
         command += ["-vf", f"scale={scale[0]}:{scale[1]}"]
     command += ["-movflags", "+faststart", tmp_dest]
@@ -241,12 +279,15 @@ def _finalize_outputs(
     """Make the browser-facing artifacts playable everywhere.
 
     1. Re-encodes the raw OpenCV ``mp4v`` output to H.264 in place (browsers
-       cannot decode mp4v). On failure the raw file is kept (degraded).
+       cannot decode mp4v), muxing in the original input's audio track (the
+       OpenCV writer is video-only). On failure the raw file is kept
+       (degraded).
     2. Encodes a browser-safe original-comparison video at the inference input
        resolution (``{jobId}_original.mp4``). Best-effort — the job completes
-       without it.
+       without it. Stays audio-free: it plays muted under the comparison
+       divider, and audio there would double-play against the enhanced video.
     """
-    if _transcode_to_h264(output_path, output_path):
+    if _transcode_to_h264(output_path, output_path, audio_source=input_path):
         logger.info(f"Job {job_id}: enhanced output re-encoded to H.264")
 
     original_path = _original_video_path(output_path)
@@ -288,6 +329,7 @@ def run_inference_stream(
             progress_queue.put(line)
 
     preview_active = PREVIEW_ENABLED and is_valid_job_id(job_id)
+    source_fps = _probe_fps(input_path) if preview_active else 30.0
 
     def preview_callback(
         current_frame: int,
@@ -307,6 +349,8 @@ def run_inference_stream(
                 "width": width,
                 "height": height,
                 "downloadUrl": f"/preview/{job_id}/{current_frame}",
+                "fps": source_fps,
+                "stride": PREVIEW_EVERY_N_FRAMES,
             }
             # Matching original (input) frame — best-effort; the enhanced
             # preview still ships if this write fails.
@@ -353,12 +397,17 @@ def run_inference_stream(
                 if os.path.exists(_original_video_path(output_path)):
                     completed["originalDownloadUrl"] = f"/result/{job_id}/original"
             progress_queue.put(json.dumps(completed))
+            # Preview frames are useless once the final video exists. Cleaning
+            # after the completed line is queued gives in-flight backend proxy
+            # fetches a wider window; a racing fetch just gets a harmless 404.
+            if preview_active:
+                _cleanup_previews(job_id)
         except InferenceCancelledError:
             if os.path.exists(output_path):
                 os.remove(output_path)
             Path(_original_video_path(output_path)).unlink(missing_ok=True)
             if preview_active:
-                shutil.rmtree(WORK_PREVIEW_DIR / job_id, ignore_errors=True)
+                _cleanup_previews(job_id)
             cancelled_line = json.dumps({
                 "status": "cancelled",
                 "jobId": job_id,
@@ -367,6 +416,8 @@ def run_inference_stream(
             })
             progress_queue.put(cancelled_line)
         except Exception as e:
+            if preview_active:
+                _cleanup_previews(job_id)
             error_line = json.dumps({
                 "status": "failed",
                 "jobId": job_id,

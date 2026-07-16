@@ -25,9 +25,9 @@ packages/
 
 1. The frontend uploads a video (`POST /api/upload`, multipart, XHR progress) and receives a `jobId`.
 2. The backend stores the file on disk (Multer), tracks the job in memory, and hands it to the AI service, consuming an NDJSON progress stream. The transport depends on `AI_TRANSFER_MODE` (see below).
-3. The AI service runs BasicVSR + SPyNet (V3 checkpoint, 4x scale) over the video frames, sampling original+enhanced preview JPEG pairs as it goes (first frame, then every `PREVIEW_EVERY_N_FRAMES`th) and finishing with an ffmpeg re-encode to browser-safe H.264 (plus a small original-comparison video). The backend saves the enhanced output to `storage/results` (downloading it from the AI service in `remote` mode) and downloads each sampled preview over HTTP to `storage/previews` — in **both** transports, since there's no shared disk to rely on.
-4. The frontend follows progress over SSE (`/api/upload/events/:jobId`, with polling fallback), rendering a live before/after comparison from the sampled frame pairs (`GET /api/upload/preview/:jobId/:frameIndex` + `…/original`) while the job runs; on completion the same player switches to the enhanced video (`/api/upload/stream/:jobId`, HTTP Range) with the synced original comparison underneath (`…/original`) and custom play/seek/volume/fullscreen controls. Progressive previews are still-frame snapshots, not a live video stream, and the final enhanced MP4 is only ever available after completion.
-5. Jobs can be cancelled end-to-end (`POST /api/upload/cancel/:jobId` bridges to the AI service, which also deletes its cached preview frames for that job).
+3. The AI service runs BasicVSR + SPyNet (V3 checkpoint, 4x scale) over the video frames, sampling original+enhanced preview JPEG pairs as it goes (first frame, then every `PREVIEW_EVERY_N_FRAMES`th — default 2, dense enough for playback — with `fps`/`stride` pacing metadata on each announcement) and finishing with an ffmpeg re-encode to browser-safe H.264 (plus a small original-comparison video). The backend saves the enhanced output to `storage/results` (downloading it from the AI service in `remote` mode) and proxies preview frames cache-through: `GET /api/upload/preview/...` serves from `storage/previews` or fetches the exact frame from the AI over HTTP on demand — in **both** transports, since there's no shared disk to rely on.
+4. The frontend follows progress over SSE (`/api/upload/events/:jobId`, with polling fallback) and plays a buffered "flipbook" before/after comparison from the sampled frame pairs (`GET /api/upload/preview/:jobId/:frameIndex` + `…/original`) while the job runs — like a delayed live broadcast: it buffers a few seconds of frames, plays them as motion at the source pace while staying safely behind the newest frame, and holds with a "Buffering preview…" state when it catches up. On completion the same player switches seamlessly to the enhanced video (`/api/upload/stream/:jobId`, HTTP Range) with the synced original comparison underneath (`…/original`) and custom play/seek/volume/fullscreen controls. The final enhanced MP4 is only ever available after completion.
+5. Jobs can be cancelled end-to-end (`POST /api/upload/cancel/:jobId` bridges to the AI service). Both sides delete their cached preview frames for a job once it reaches any terminal state.
 
 ### Single-server vs two-server (`AI_TRANSFER_MODE`)
 
@@ -91,7 +91,7 @@ Each app commits `.env.development.example` / `.env.production.example`. Backend
 - frontend: `VITE_PORT`, `VITE_API_BASE_URL` (backend **origin**, no `/api` suffix)
 - ai: `CHECKPOINT_PATH`, `DEVICE`, `MAX_INPUT_HEIGHT`, `HOST`, `PORT`, `AI_INTERNAL_TOKEN`, `WORK_UPLOAD_DIR`, `WORK_RESULT_DIR`, `PREVIEW_ENABLED`, `PREVIEW_EVERY_N_FRAMES`, `PREVIEW_MAX_WIDTH`, `PREVIEW_JPEG_QUALITY`, `WORK_PREVIEW_DIR`
 
-For a two-server deployment set `AI_TRANSFER_MODE=remote`, point `AI_SERVICE_URL` at the GPU server's internal address, and set the **same** `AI_INTERNAL_TOKEN` on both the backend and the AI service. Keep the demo upload cap small (e.g. `MAX_FILE_SIZE_MB=20`). The concrete server addresses, domain, Nginx/PM2/SSL setup are handled by infrastructure tooling, not this repo.
+For a two-server deployment set `AI_TRANSFER_MODE=remote`, point `AI_SERVICE_URL` at the GPU server's internal address, and set the **same** `AI_INTERNAL_TOKEN` on both the backend and the AI service. Keep the upload cap bounded (recommended `MAX_FILE_SIZE_MB=100` — the AI loads all frames into RAM; Nginx's `client_max_body_size` must be at least the cap). The concrete server addresses, domain, Nginx/PM2/SSL setup are handled by infrastructure tooling, not this repo.
 
 ## The AI model
 
@@ -128,9 +128,9 @@ Operational guide for running the fine-tune on a temporary GPU environment (requ
 ## Known limitations
 
 - Job state is in-memory; a backend restart loses all jobs. No DB persistence.
-- No automatic cleanup of old jobs or files (uploads, results, cached preview frames, and AI work dirs grow until cleared manually).
+- No automatic cleanup of old jobs or files (uploads, results, and AI work dirs grow until cleared manually). Cached preview frames are the exception — both servers delete them per job at terminal states.
 - Single-node disk storage per server (`storage/`, gitignored); there is no shared storage between the app and GPU servers — `remote` mode exists precisely because of this.
-- The recommended public-demo upload cap is small (`MAX_FILE_SIZE_MB=20`).
+- The recommended public upload cap is `MAX_FILE_SIZE_MB=100` — bounded because the AI loads all frames into RAM (duration/resolution drive memory more than file size; `MAX_INPUT_HEIGHT=480` bounds resolution). Oversized uploads return a friendly 413.
 - Deploy script builds the frontend but static hosting must be configured separately (see `deploy-upscale-ai.sh`).
 
 ## Deployment

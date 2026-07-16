@@ -53,6 +53,16 @@ function uploadWithProgress(args: UploadArgs): Promise<UploadResponse> {
         } catch {
           reject(new Error('Upload succeeded but the response was malformed'));
         }
+      } else if (xhr.status === 413) {
+        // A 413 can come from the backend (RFC 7807 JSON naming the exact
+        // cap) or straight from Nginx (HTML body extractProblemDetail cannot
+        // parse) — show a friendly limit message either way.
+        reject(
+          new Error(
+            extractProblemDetail(xhr.responseText) ??
+              'This video is larger than the server upload limit. Please try a smaller file.'
+          )
+        );
       } else {
         reject(
           new Error(

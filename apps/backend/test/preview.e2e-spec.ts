@@ -35,10 +35,16 @@ describe('Preview endpoints (e2e)', () => {
     expect((body['type'] as string).startsWith('/problems/')).toBe(true);
   });
 
-  it('returns 404 for an unknown job (frame index)', () => {
-    return request(app.getHttpServer())
-      .get('/api/upload/preview/no-such-job/12')
-      .expect(404);
+  it('returns 404 ProblemDetails for an unknown job (frame index) without contacting the AI', async () => {
+    // No AI service runs in e2e, so anything but an immediate local 404 here
+    // would surface as a 502/timeout — this also proves the cache-through
+    // proxy rejects unknown jobs before fetching.
+    const response = await request(app.getHttpServer()).get(
+      '/api/upload/preview/no-such-job/12'
+    );
+    expect(response.status).toBe(404);
+    const body = response.body as Record<string, unknown>;
+    expect((body['type'] as string).startsWith('/problems/')).toBe(true);
   });
 
   it('returns 400 for a malformed frame index', () => {

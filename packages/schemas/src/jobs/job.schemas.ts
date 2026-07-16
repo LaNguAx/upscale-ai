@@ -18,7 +18,11 @@ export const jobPreviewSchema = z.object({
   /** Matching original (input) frame, e.g. `/api/upload/preview/{jobId}/{frameIndex}/original`. */
   originalImageUrl: z.string().optional(),
   width: z.number().int().positive().optional(),
-  height: z.number().int().positive().optional()
+  height: z.number().int().positive().optional(),
+  /** Source-video frames per second — lets the client pace flipbook playback. */
+  fps: z.number().positive().optional(),
+  /** Sampling stride: a preview frame exists every `stride` source frames. */
+  stride: z.number().int().positive().optional()
 });
 
 export type JobPreview = z.infer<typeof jobPreviewSchema>;
