@@ -53,7 +53,7 @@ logger = logging.getLogger(__name__)
 # --- Configuration ---
 CHECKPOINT_PATH = os.environ.get(
     "CHECKPOINT_PATH",
-    str(Path(__file__).parent / "checkpoints" / "vsr_model_best.pth"),
+    str(Path(__file__).parent / "checkpoints" / "vsr_model_v4_best_codec_psnr.pth"),
 )
 DEVICE_NAME = os.environ.get("DEVICE", "cuda" if torch.cuda.is_available() else "cpu")
 DEVICE = torch.device(DEVICE_NAME)
@@ -131,7 +131,7 @@ async def lifespan(app: FastAPI):
     global engine, model_loaded
 
     if os.path.exists(CHECKPOINT_PATH):
-        logger.info(f"Loading V3 model from {CHECKPOINT_PATH} on {DEVICE}...")
+        logger.info(f"Loading model from {CHECKPOINT_PATH} on {DEVICE}...")
         engine = VSRInferenceEngine(
             checkpoint_path=CHECKPOINT_PATH,
             device=DEVICE_NAME,

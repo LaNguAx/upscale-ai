@@ -43,7 +43,7 @@ Errors follow RFC 7807 (ProblemDetails) with a `traceId` from the request-id mid
 - Node >= 24 (see `.nvmrc`)
 - pnpm 10 (`corepack enable` or `npm i -g pnpm`)
 - Python 3.11+ with pip (for the AI service)
-- The model checkpoint at `apps/ai/checkpoints/vsr_model_best.pth` (not in git)
+- The model checkpoints at `apps/ai/checkpoints/` (committed): `vsr_model_v4_best_codec_psnr.pth` (V4, the default) and `vsr_model_best.pth` (V3)
 
 ## Getting started
 
@@ -121,7 +121,7 @@ The V3 checkpoint was trained on per-frame image degradations only (blur/noise/J
 - `scripts/degrade_clip_video.py` — per-**clip** degradation ending in a real H.264 encode/decode round-trip (random CRF 23–38, optional second encode to mimic re-upload). All parameters are sampled once per clip, so the LR data has temporally consistent degradation. Video mode (`python scripts/degrade_clip_video.py demo/input/demo3.mp4 --preview`) writes `demo/degraded/<stem>_youtube_lr.mp4` (+ a nearest-neighbor x4 preview); directory mode takes a folder of HR PNG frames and writes `hr_frames/` + `lr_frames/` (more with `--variants N`). Sampled parameters are printed per clip.
 - `scripts/finetune_v4_youtube.py` — standalone V4 training entrypoint, meant to run in the training environment that built the V3 splits (copy it there together with `degrade_clip_video.py` and `apps/ai/baseline/model_architecture.py`). It builds a new split tree under `vsr_workspace/experiments/model_v4_finetune_youtube/` (HR frames symlinked from V3, new codec LR generated per clip, a replay subset keeping the old V3 LR against catastrophic forgetting, plus `val_old`/`val_codec` sets), then fine-tunes the V3 checkpoint with SPyNet frozen at LR `2.5e-5`, checkpointing on the best combined old+codec val loss. Start with `--data-only --max-clips 5` to build and visually inspect the degraded LR frames before spending GPU time; resume is automatic from the V4 `training_state.pth` — including mid-epoch: the full training state (model, optimizer, scheduler, RNG states, batch position, running loss counters) is snapshotted atomically every `--save-every` train batches (default 500) and at the train/val boundary, so a crash or environment reset resumes from the last saved batch instead of replaying the whole epoch. The V3 experiment directory is only ever read.
 
-The fine-tuned weights (`vsr_model_v4_best_combined.pth`) are drop-in for the app: copy into `apps/ai/checkpoints/` and point `CHECKPOINT_PATH` at them.
+The fine-tune writes two candidate checkpoints (`vsr_model_v4_best_combined.pth`, best combined old+codec val loss, and `vsr_model_v4_best_codec_psnr.pth`, best codec PSNR). Both are drop-in for the app: copy into `apps/ai/checkpoints/` and point `CHECKPOINT_PATH` at them. `vsr_model_v4_best_codec_psnr.pth` is the checkpoint the app loads by default.
 
 Operational guide for running the fine-tune on a temporary GPU environment (required files, start/restart procedure, crash diagnosis): `scripts/GPU_TRAINING_RUNBOOK.md`.
 

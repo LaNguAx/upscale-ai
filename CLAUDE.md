@@ -22,7 +22,7 @@ If you change behavior, structure, endpoints, env vars, schemas, commands, or wo
 | backend  | `PREVIEW_DIR`              | `../../storage/previews`           | Zod-validated, resolved from `apps/backend`        |
 | frontend | `VITE_PORT`                | `5173`                             | Read in `vite.config.ts`                           |
 | frontend | `VITE_API_BASE_URL`        | `http://localhost:3000`            | Backend origin (no `/api` suffix), `config/api.ts` |
-| ai       | `CHECKPOINT_PATH`          | `./checkpoints/vsr_model_best.pth` | Read in `server.py`                                |
+| ai       | `CHECKPOINT_PATH`          | `./checkpoints/vsr_model_v4_best_codec_psnr.pth` | Read in `server.py`                  |
 | ai       | `DEVICE`                   | auto (`cuda`/`cpu`)                | Read in `server.py`                                |
 | ai       | `MAX_INPUT_HEIGHT`         | `480`                              | Read in `server.py`                                |
 | ai       | `HIGH_RES_POLICY`          | `reject`                           | Read in `server.py`; reject/downscale/native       |

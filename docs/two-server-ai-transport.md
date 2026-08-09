@@ -116,7 +116,7 @@ Known pre-existing issues (NOT introduced here; no frontend/`package.json`/lockf
 ## Local manual test (single machine, simulating remote mode)
 
 Requires Python deps installed (`pnpm --filter ai setup`) and the checkpoint at
-`apps/ai/checkpoints/vsr_model_best.pth`.
+`apps/ai/checkpoints/vsr_model_v4_best_codec_psnr.pth` (the default checkpoint).
 
 1. AI: set `AI_INTERNAL_TOKEN=dev-secret`, run `pnpm --filter ai dev`; confirm
    `GET http://localhost:8000/health` shows `model_loaded: true`.
