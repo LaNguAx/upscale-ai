@@ -37,7 +37,7 @@ Copy `.env.development.example` to `.env.development.local` and adjust as needed
 | `CORS_ORIGIN`               | `*`                               |
 | `AI_SERVICE_URL`            | `http://localhost:8000`           |
 | `UPLOAD_DIR` / `RESULT_DIR` | `../../storage/{uploads,results}` |
-| `MAX_FILE_SIZE_MB`          | `500` (recommended prod: `100`)   |
+| `MAX_FILE_SIZE_MB`          | `500` (prod too; see AGENTS.md)   |
 | `ALLOWED_VIDEO_EXTENSIONS`  | `.mp4,.avi,.mkv,.mov,.wmv,.webm`  |
 
 ## Testing and checks
