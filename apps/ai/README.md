@@ -31,12 +31,13 @@ The exact NDJSON message shapes are documented in [AGENTS.md](AGENTS.md).
 
 ## Configuration
 
-| Variable           | Default                            | Purpose                                |
-| ------------------ | ---------------------------------- | -------------------------------------- |
-| `CHECKPOINT_PATH`  | `./checkpoints/vsr_model_best.pth` | Model weights                          |
-| `DEVICE`           | auto (`cuda` if available)         | PyTorch device                         |
-| `MAX_INPUT_HEIGHT` | `480`                              | Inputs taller than this are downscaled |
-| `HOST` / `PORT`    | `0.0.0.0` / `8000`                 | Bind address (when run as `__main__`)  |
+| Variable           | Default                            | Purpose                                          |
+| ------------------ | ---------------------------------- | ------------------------------------------------ |
+| `CHECKPOINT_PATH`  | `./checkpoints/vsr_model_best.pth` | Model weights                                    |
+| `DEVICE`           | auto (`cuda` if available)         | PyTorch device                                   |
+| `MAX_INPUT_HEIGHT` | `480`                              | Maximum supported input height                   |
+| `HIGH_RES_POLICY`  | `reject`                           | Taller input: `reject`, `downscale`, or `native` |
+| `HOST` / `PORT`    | `0.0.0.0` / `8000`                 | Bind address (when run as `__main__`)            |
 
 ## Requirements
 
@@ -47,5 +48,6 @@ The exact NDJSON message shapes are documented in [AGENTS.md](AGENTS.md).
 
 ## Notes
 
-- All frames of a video are loaded into RAM before processing; very long or high-resolution videos can exhaust memory.
+- Frames are streamed: only a rolling window of `seq_len` (15) frames is held in memory, so RAM does not grow with video length.
+- Input taller than `MAX_INPUT_HEIGHT` is **rejected** by default (the job fails with a message naming the resolution). Set `HIGH_RES_POLICY=downscale` to downscale it automatically instead, or `native` to run at full resolution (VRAM-hungry — a 1080p input yields a 4320p output).
 - `apps/ai/baseline/` (model architecture and inference engine) is frozen baseline code — do not modify it without an explicit request.

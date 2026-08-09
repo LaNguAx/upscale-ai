@@ -25,6 +25,7 @@ If you change behavior, structure, endpoints, env vars, schemas, commands, or wo
 | ai       | `CHECKPOINT_PATH`          | `./checkpoints/vsr_model_best.pth` | Read in `server.py`                                |
 | ai       | `DEVICE`                   | auto (`cuda`/`cpu`)                | Read in `server.py`                                |
 | ai       | `MAX_INPUT_HEIGHT`         | `480`                              | Read in `server.py`                                |
+| ai       | `HIGH_RES_POLICY`          | `reject`                           | Read in `server.py`; reject/downscale/native       |
 | ai       | `AI_INTERNAL_TOKEN`        | `` (empty)                         | Read in `server.py`; bearer auth when set          |
 | ai       | `WORK_UPLOAD_DIR`          | `../../storage/ai/uploads`         | Read in `server.py` (remote-mode uploads)          |
 | ai       | `WORK_RESULT_DIR`          | `../../storage/ai/results`         | Read in `server.py` (remote-mode results)          |

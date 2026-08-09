@@ -89,13 +89,13 @@ Each app commits `.env.development.example` / `.env.production.example`. Backend
 
 - backend: `PORT`, `CORS_ORIGIN`, `AI_SERVICE_URL`, `AI_TRANSFER_MODE` (`path` | `remote`), `AI_INTERNAL_TOKEN`, `UPLOAD_DIR`, `RESULT_DIR`, `MAX_FILE_SIZE_MB`, `ALLOWED_VIDEO_EXTENSIONS`, `PREVIEW_ENABLED`, `PREVIEW_DIR`
 - frontend: `VITE_PORT`, `VITE_API_BASE_URL` (backend **origin**, no `/api` suffix)
-- ai: `CHECKPOINT_PATH`, `DEVICE`, `MAX_INPUT_HEIGHT`, `HOST`, `PORT`, `AI_INTERNAL_TOKEN`, `WORK_UPLOAD_DIR`, `WORK_RESULT_DIR`, `PREVIEW_ENABLED`, `PREVIEW_EVERY_N_FRAMES`, `PREVIEW_MAX_WIDTH`, `PREVIEW_JPEG_QUALITY`, `WORK_PREVIEW_DIR`
+- ai: `CHECKPOINT_PATH`, `DEVICE`, `MAX_INPUT_HEIGHT`, `HIGH_RES_POLICY`, `HOST`, `PORT`, `AI_INTERNAL_TOKEN`, `WORK_UPLOAD_DIR`, `WORK_RESULT_DIR`, `PREVIEW_ENABLED`, `PREVIEW_EVERY_N_FRAMES`, `PREVIEW_MAX_WIDTH`, `PREVIEW_JPEG_QUALITY`, `WORK_PREVIEW_DIR`
 
-For a two-server deployment set `AI_TRANSFER_MODE=remote`, point `AI_SERVICE_URL` at the GPU server's internal address, and set the **same** `AI_INTERNAL_TOKEN` on both the backend and the AI service. Keep the upload cap bounded (recommended `MAX_FILE_SIZE_MB=500` — a weak but real guard, since the AI loads all frames into RAM and clip length, not file size, drives memory; Nginx's `client_max_body_size` must be at least the cap). The concrete server addresses, domain, Nginx/PM2/SSL setup are handled by infrastructure tooling, not this repo.
+For a two-server deployment set `AI_TRANSFER_MODE=remote`, point `AI_SERVICE_URL` at the GPU server's internal address, and set the **same** `AI_INTERNAL_TOKEN` on both the backend and the AI service. Keep the upload cap bounded (recommended `MAX_FILE_SIZE_MB=500` — a weak but real guard, since clip length, not file size, drives processing time; Nginx's `client_max_body_size` must be at least the cap). The concrete server addresses, domain, Nginx/PM2/SSL setup are handled by infrastructure tooling, not this repo.
 
 ## The AI model
 
-`apps/ai/baseline/` contains the V3 architecture: **BasicVSR with a SPyNet optical-flow backbone** (sequence length 15, 4x upscale). `vsr_inference.py` exposes `VSRInferenceEngine` with frame-window batching, progress callbacks, and cooperative cancellation. Training artifacts live in `Model_v3.ipynb`. Inference parameters are owned by the engine/checkpoint — the backend does not override them.
+`apps/ai/baseline/` contains the V3 architecture: **BasicVSR with a SPyNet optical-flow backbone** (sequence length 15, 4x upscale). `vsr_inference.py` exposes `VSRInferenceEngine` with streaming rolling-window inference (bounded RAM), progress callbacks, and cooperative cancellation; `windowing.py` holds the dependency-free chunk scheduling and sizing helpers. Training artifacts live in `Model_v3.ipynb`. Inference parameters are owned by the engine/checkpoint — the backend does not override them.
 
 There is **no mock fallback**: if the AI service is down or the checkpoint is missing, jobs fail with a clear error.
 
@@ -130,7 +130,7 @@ Operational guide for running the fine-tune on a temporary GPU environment (requ
 - Job state is in-memory; a backend restart loses all jobs. No DB persistence.
 - No automatic cleanup of old jobs or files (uploads, results, and AI work dirs grow until cleared manually). Cached preview frames are the exception — both servers delete them per job at terminal states.
 - Single-node disk storage per server (`storage/`, gitignored); there is no shared storage between the app and GPU servers — `remote` mode exists precisely because of this.
-- The recommended public upload cap is `MAX_FILE_SIZE_MB=500` (raised from 100 so short high-bitrate footage such as 4K phone clips fits). It is a weak proxy: the AI loads all frames into RAM, so clip duration/frame count — not file size — drives memory (`MAX_INPUT_HEIGHT=480` bounds resolution), and there is no duration/frame-count guard yet — a long low-bitrate clip within the cap can OOM the AI process. Oversized uploads return a friendly 413.
+- The recommended public upload cap is `MAX_FILE_SIZE_MB=500` (raised from 100 so short high-bitrate footage such as 4K phone clips fits). It is a weak proxy for cost: the AI streams frames, so RAM stays bounded regardless of clip length, but clip duration/frame count — not file size — still drives processing time (`MAX_INPUT_HEIGHT=480` bounds per-frame cost), and there is no duration/frame-count guard yet, so a long low-bitrate clip within the cap can tie up the AI process for a very long time. Oversized uploads return a friendly 413.
 - Deploy script builds the frontend but static hosting must be configured separately (see `deploy-upscale-ai.sh`).
 
 ## Deployment
