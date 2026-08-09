@@ -31,7 +31,13 @@ from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, UploadF
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 
-from baseline import VSRInferenceEngine, SEQ_LEN, SCALE, InferenceCancelledError
+from baseline import (
+    VSRInferenceEngine,
+    SEQ_LEN,
+    SCALE,
+    HighResPolicy,
+    InferenceCancelledError,
+)
 from security import (
     LATEST_FRAME_KEY,
     ORIGINAL_KEY_SUFFIX,
@@ -52,6 +58,25 @@ CHECKPOINT_PATH = os.environ.get(
 DEVICE_NAME = os.environ.get("DEVICE", "cuda" if torch.cuda.is_available() else "cpu")
 DEVICE = torch.device(DEVICE_NAME)
 MAX_INPUT_HEIGHT = int(os.environ.get("MAX_INPUT_HEIGHT", "480"))
+
+
+def _parse_high_res_policy() -> HighResPolicy:
+    """Read ``HIGH_RES_POLICY``, falling back to the safe default on typos."""
+    raw = os.environ.get("HIGH_RES_POLICY", HighResPolicy.REJECT.value).strip().lower()
+    try:
+        return HighResPolicy(raw)
+    except ValueError:
+        valid = ", ".join(p.value for p in HighResPolicy)
+        logger.warning(
+            f"Invalid HIGH_RES_POLICY={raw!r} (expected one of: {valid}); "
+            f"falling back to {HighResPolicy.REJECT.value}"
+        )
+        return HighResPolicy.REJECT
+
+
+# What to do with input taller than MAX_INPUT_HEIGHT. Rejecting by default keeps
+# quality loss explicit — set HIGH_RES_POLICY=downscale to restore auto-resizing.
+HIGH_RES_POLICY = _parse_high_res_policy()
 
 # Shared secret for internal backend-to-AI calls. Empty disables auth (dev only).
 AI_INTERNAL_TOKEN = os.environ.get("AI_INTERNAL_TOKEN", "")
@@ -112,10 +137,14 @@ async def lifespan(app: FastAPI):
             device=DEVICE_NAME,
             seq_len=SEQ_LEN,
             scale=SCALE,
+            high_res_policy=HIGH_RES_POLICY,
         )
         model_loaded = True
         params = sum(p.numel() for p in engine.model.parameters())
-        logger.info(f"Model loaded ({params:,} parameters)")
+        logger.info(
+            f"Model loaded ({params:,} parameters), "
+            f"high-res policy: {HIGH_RES_POLICY.value} (max {MAX_INPUT_HEIGHT}px)"
+        )
     else:
         logger.warning(f"No checkpoint found at {CHECKPOINT_PATH} — model not loaded")
         engine = None

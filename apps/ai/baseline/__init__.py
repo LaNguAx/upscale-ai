@@ -2,6 +2,7 @@
 
 from .model_architecture import BasicVSRRecurrentSeq
 from .vsr_inference import VSRInferenceEngine, InferenceCancelledError
+from .windowing import HighResPolicy, ResolutionTooHighError
 
 # V3 training-time hyperparameters (must match the trained checkpoint)
 SCALE = 4
@@ -15,6 +16,8 @@ __all__ = [
     "BasicVSRRecurrentSeq",
     "VSRInferenceEngine",
     "InferenceCancelledError",
+    "HighResPolicy",
+    "ResolutionTooHighError",
     "SCALE",
     "SEQ_LEN",
     "NUM_FEATS",
