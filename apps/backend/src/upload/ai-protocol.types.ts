@@ -58,11 +58,19 @@ export interface AICompletedUpdate {
   originalDownloadUrl?: string;
 }
 
-/** Terminal NDJSON line when inference fails. */
+/**
+ * Terminal NDJSON line when inference fails.
+ *
+ * Expected rejections (e.g. input above the supported resolution) carry
+ * `errorCode` + a user-safe `message` instead of `error`, so the raw Python
+ * exception text never reaches the client.
+ */
 export interface AIFailedUpdate {
   status: 'failed';
   jobId: string;
-  error: string;
+  error?: string;
+  errorCode?: string;
+  message?: string;
 }
 
 /** Terminal NDJSON line when a job is cancelled by the user. */

@@ -15,7 +15,7 @@ Or directly: `python -m uvicorn server:app --reload --port 8000` from this direc
 
 ### Model checkpoint
 
-Two checkpoints ship in `checkpoints/` (~21 MB each, committed): `vsr_model_best.pth` (V3, the default) and `vsr_model_v4_best_codec_psnr.pth` (V4 codec-degradation fine-tune). The default load path is the V3 file — set `CHECKPOINT_PATH` to select another checkpoint. Without a checkpoint the server still boots, but `/health` reports `model_loaded: false` and `/process` returns 503. `/health` also reports the loaded checkpoint filename (`checkpoint`), so you can verify which weights a deployment runs.
+Two checkpoints ship in `checkpoints/` (~21 MB each, committed): `vsr_model_v4_best_codec_psnr.pth` (V4 codec-degradation fine-tune, the default) and `vsr_model_best.pth` (V3, the original baseline). The default load path is the V4 file — set `CHECKPOINT_PATH` to select another checkpoint. Without a checkpoint the server still boots, but `/health` reports `model_loaded: false` and `/process` returns 503. `/health` also reports the loaded checkpoint filename (`checkpoint`), so you can verify which weights a deployment runs.
 
 On first model load, SPyNet pretrained weights are downloaded from OpenMMLab — network access is required once.
 
@@ -31,12 +31,12 @@ The exact NDJSON message shapes are documented in [AGENTS.md](AGENTS.md).
 
 ## Configuration
 
-| Variable           | Default                            | Purpose                                |
-| ------------------ | ---------------------------------- | -------------------------------------- |
-| `CHECKPOINT_PATH`  | `./checkpoints/vsr_model_best.pth` | Model weights                          |
-| `DEVICE`           | auto (`cuda` if available)         | PyTorch device                         |
-| `MAX_INPUT_HEIGHT` | `480`                              | Inputs taller than this are downscaled |
-| `HOST` / `PORT`    | `0.0.0.0` / `8000`                 | Bind address (when run as `__main__`)  |
+| Variable           | Default                            | Purpose                                          |
+| ------------------ | ---------------------------------- | ------------------------------------------------ |
+| `CHECKPOINT_PATH`  | `./checkpoints/vsr_model_v4_best_codec_psnr.pth` | Model weights                      |
+| `DEVICE`           | auto (`cuda` if available)         | PyTorch device                                   |
+| `MAX_INPUT_HEIGHT` | `480`                              | Maximum supported input height                   |
+| `HOST` / `PORT`    | `0.0.0.0` / `8000`                 | Bind address (when run as `__main__`)            |
 
 ## Requirements
 
@@ -47,5 +47,6 @@ The exact NDJSON message shapes are documented in [AGENTS.md](AGENTS.md).
 
 ## Notes
 
-- All frames of a video are loaded into RAM before processing; very long or high-resolution videos can exhaust memory.
+- Frames are streamed: only a rolling window of `seq_len` (15) frames is held in memory, so RAM does not grow with video length.
+- Input taller than `MAX_INPUT_HEIGHT` is **rejected** (the job fails with a message naming the resolution). There is no automatic downscaling — re-encode the video at a lower resolution first.
 - `apps/ai/baseline/` (model architecture and inference engine) is frozen baseline code — do not modify it without an explicit request.

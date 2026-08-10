@@ -11,6 +11,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import {
   isTerminalJobState,
+  type JobErrorCode,
   type JobPreview,
   type JobState,
   type JobStatus,
@@ -45,6 +46,7 @@ interface JobRecord {
   createdAt: string;
   updatedAt: string;
   error?: string;
+  errorCode?: JobErrorCode;
   preview?: JobPreviewMetadata;
 }
 
@@ -119,6 +121,7 @@ export class UploadService {
       progress: job.progress,
       updatedAt: job.updatedAt,
       error: job.error,
+      errorCode: job.errorCode,
       preview: this.toJobPreview(job)
     };
   }
@@ -127,7 +130,8 @@ export class UploadService {
     jobId: string,
     state: JobState,
     progress: number,
-    error?: string
+    error?: string,
+    errorCode?: JobErrorCode
   ): void {
     const job = this.jobs.get(jobId);
     if (!job) return;
@@ -138,6 +142,7 @@ export class UploadService {
     job.progress = progress;
     job.updatedAt = now;
     if (error !== undefined) job.error = error;
+    if (errorCode !== undefined) job.errorCode = errorCode;
 
     this.jobUpdates$.next(this.toJobUpdate(job));
   }
@@ -171,6 +176,7 @@ export class UploadService {
       createdAt: job.createdAt,
       updatedAt: job.updatedAt,
       error: job.error,
+      errorCode: job.errorCode,
       preview: this.toJobPreview(job)
     };
   }

@@ -27,6 +27,11 @@ export const jobPreviewSchema = z.object({
 
 export type JobPreview = z.infer<typeof jobPreviewSchema>;
 
+/** Machine-readable failure reasons the client renders its own copy for. */
+export const jobErrorCodeSchema = z.enum(['INPUT_RESOLUTION_TOO_HIGH']);
+
+export type JobErrorCode = z.infer<typeof jobErrorCodeSchema>;
+
 export const jobStatusSchema = z.object({
   jobId: z.string(),
   state: jobStateSchema,
@@ -34,6 +39,7 @@ export const jobStatusSchema = z.object({
   createdAt: z.string(),
   updatedAt: z.string(),
   error: z.string().optional(),
+  errorCode: jobErrorCodeSchema.optional(),
   preview: jobPreviewSchema.optional()
 });
 
@@ -46,6 +52,7 @@ export const jobUpdateSchema = z.object({
   progress: z.number().min(0).max(100),
   updatedAt: z.string(),
   error: z.string().optional(),
+  errorCode: jobErrorCodeSchema.optional(),
   preview: jobPreviewSchema.optional()
 });
 

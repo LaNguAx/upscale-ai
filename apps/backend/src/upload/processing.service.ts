@@ -2,7 +2,12 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { isTerminalJobState, type JobState } from '@repo/schemas/jobs';
+import {
+  isTerminalJobState,
+  jobErrorCodeSchema,
+  type JobErrorCode,
+  type JobState
+} from '@repo/schemas/jobs';
 import { AiClientService } from '@/upload/ai-client.service';
 import { UploadService } from '@/upload/upload.service';
 import { PreviewCacheService } from '@/upload/preview-cache.service';
@@ -21,6 +26,20 @@ interface ActiveJob {
 }
 
 type UpdateOutcome = 'continue' | 'done';
+
+/**
+ * An AI failure the user is meant to see, carrying a recognised `errorCode`.
+ * Thrown so it flows through the same catch as any other processing error.
+ */
+class AiJobError extends Error {
+  constructor(
+    message: string,
+    readonly errorCode?: JobErrorCode
+  ) {
+    super(message);
+    this.name = 'AiJobError';
+  }
+}
 
 @Injectable()
 export class ProcessingService {
@@ -90,8 +109,9 @@ export class ProcessingService {
       );
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown error';
+      const errorCode = err instanceof AiJobError ? err.errorCode : undefined;
       if (!this.isCancelled(jobId)) {
-        this.uploadService.updateJob(jobId, 'failed', 0, message);
+        this.uploadService.updateJob(jobId, 'failed', 0, message, errorCode);
         this.logger.error(`Job ${jobId}: failed — ${message}`);
       } else {
         this.logger.log(`Job ${jobId}: cancelled`);
@@ -177,6 +197,15 @@ export class ProcessingService {
         return 'done';
       }
       case 'failed': {
+        // A recognised errorCode means the AI already produced user-safe copy;
+        // anything else falls back to the raw error text as before.
+        const parsed = jobErrorCodeSchema.safeParse(update.errorCode);
+        if (parsed.success) {
+          throw new AiJobError(
+            update.message || 'AI processing failed',
+            parsed.data
+          );
+        }
         throw new Error(update.error || 'AI processing failed');
       }
       case 'completed': {

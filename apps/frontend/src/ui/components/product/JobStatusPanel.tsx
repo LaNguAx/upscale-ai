@@ -17,8 +17,27 @@ import {
 import { UPLOAD_EVENTS_ENDPOINT } from '@repo/consts/upload';
 import { getJobStatusContract } from '@repo/contracts/upload';
 import { jobUpdateSchema } from '@repo/schemas/jobs';
-import type { JobPreview, JobState, JobUpdate } from '@repo/schemas/jobs';
+import type {
+  JobErrorCode,
+  JobPreview,
+  JobState,
+  JobUpdate
+} from '@repo/schemas/jobs';
 import { buildApiUrl } from '@/config/api';
+
+/** User-facing copy for failures the backend flags with a known code. */
+const ERROR_CODE_MESSAGES: Record<JobErrorCode, string> = {
+  INPUT_RESOLUTION_TOO_HIGH:
+    'Unfortunately, our current version supports input videos up to 480p. Please upload a lower-resolution video and try again.'
+};
+
+/** Friendly copy when the backend named a known code, raw text otherwise. */
+function resolveFailureMessage(job: {
+  error?: string | undefined;
+  errorCode?: JobErrorCode | undefined;
+}): string | undefined {
+  return job.errorCode ? ERROR_CODE_MESSAGES[job.errorCode] : job.error;
+}
 
 interface JobStatusPanelProps {
   jobId: string;
@@ -90,7 +109,7 @@ export function JobStatusPanel({
       } else if (data.state === 'cancelled') {
         onCancelledRef.current(data.error);
       } else if (data.state === 'failed') {
-        onFailedRef.current(data.error);
+        onFailedRef.current(resolveFailureMessage(data));
       }
     };
 
@@ -255,9 +274,9 @@ export function JobStatusPanel({
           </span>
         </div>
 
-        {status.state === 'failed' && status.error && (
+        {status.state === 'failed' && resolveFailureMessage(status) && (
           <Alert variant="destructive">
-            <AlertDescription>{status.error}</AlertDescription>
+            <AlertDescription>{resolveFailureMessage(status)}</AlertDescription>
           </Alert>
         )}
       </CardContent>
