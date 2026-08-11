@@ -31,7 +31,13 @@ from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, UploadF
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 
-from baseline import VSRInferenceEngine, SEQ_LEN, SCALE, InferenceCancelledError
+from baseline import (
+    VSRInferenceEngine,
+    SEQ_LEN,
+    SCALE,
+    InferenceCancelledError,
+    ResolutionTooHighError,
+)
 from security import (
     LATEST_FRAME_KEY,
     ORIGINAL_KEY_SUFFIX,
@@ -47,11 +53,20 @@ logger = logging.getLogger(__name__)
 # --- Configuration ---
 CHECKPOINT_PATH = os.environ.get(
     "CHECKPOINT_PATH",
-    str(Path(__file__).parent / "checkpoints" / "vsr_model_best.pth"),
+    str(Path(__file__).parent / "checkpoints" / "vsr_model_v4_best_codec_psnr.pth"),
 )
 DEVICE_NAME = os.environ.get("DEVICE", "cuda" if torch.cuda.is_available() else "cpu")
 DEVICE = torch.device(DEVICE_NAME)
+# Input taller than this is rejected — never auto-downscaled.
 MAX_INPUT_HEIGHT = int(os.environ.get("MAX_INPUT_HEIGHT", "480"))
+
+# Machine-readable reason on the `failed` line, so clients can render their own
+# copy instead of the raw exception text.
+INPUT_RESOLUTION_TOO_HIGH = "INPUT_RESOLUTION_TOO_HIGH"
+INPUT_RESOLUTION_TOO_HIGH_MESSAGE = (
+    "Unfortunately, our current version supports input videos up to 480p. "
+    "Please upload a lower-resolution video and try again."
+)
 
 # Shared secret for internal backend-to-AI calls. Empty disables auth (dev only).
 AI_INTERNAL_TOKEN = os.environ.get("AI_INTERNAL_TOKEN", "")
@@ -106,7 +121,7 @@ async def lifespan(app: FastAPI):
     global engine, model_loaded
 
     if os.path.exists(CHECKPOINT_PATH):
-        logger.info(f"Loading V3 model from {CHECKPOINT_PATH} on {DEVICE}...")
+        logger.info(f"Loading model from {CHECKPOINT_PATH} on {DEVICE}...")
         engine = VSRInferenceEngine(
             checkpoint_path=CHECKPOINT_PATH,
             device=DEVICE_NAME,
@@ -115,7 +130,10 @@ async def lifespan(app: FastAPI):
         )
         model_loaded = True
         params = sum(p.numel() for p in engine.model.parameters())
-        logger.info(f"Model loaded ({params:,} parameters)")
+        logger.info(
+            f"Model loaded ({params:,} parameters), "
+            f"max input height: {MAX_INPUT_HEIGHT}px"
+        )
     else:
         logger.warning(f"No checkpoint found at {CHECKPOINT_PATH} — model not loaded")
         engine = None
@@ -415,6 +433,18 @@ def run_inference_stream(
                 "error": "Upscaling cancelled by user",
             })
             progress_queue.put(cancelled_line)
+        except ResolutionTooHighError as e:
+            # Expected rejection, not a crash: keep the technical detail in the
+            # logs and hand the client a code it can render its own copy for.
+            if preview_active:
+                _cleanup_previews(job_id)
+            logger.info(f"Job {job_id}: rejected — {e}")
+            progress_queue.put(json.dumps({
+                "status": "failed",
+                "jobId": job_id,
+                "errorCode": INPUT_RESOLUTION_TOO_HIGH,
+                "message": INPUT_RESOLUTION_TOO_HIGH_MESSAGE,
+            }))
         except Exception as e:
             if preview_active:
                 _cleanup_previews(job_id)

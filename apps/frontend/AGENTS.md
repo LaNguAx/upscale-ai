@@ -30,7 +30,7 @@ Everything lives under `/products` — a single page for the one real model the 
 
 - API paths come from `@repo/consts`/`@repo/contracts`; response types from `@repo/schemas`. Never hardcode `/api/...` strings or duplicate response types.
 - Responses are validated with `contract.responseSchema.parse(...)`; SSE payloads with `jobUpdateSchema` from `@repo/schemas/jobs`.
-- Backend errors are RFC 7807 — read `detail`/`title` from error payloads. `Product.tsx` also handles RTK `CUSTOM_ERROR` strings from the XHR upload path.
+- Backend errors are RFC 7807 — read `detail`/`title` from error payloads. **Job** failures are different: a terminal `failed` `JobUpdate`/`JobStatus` may carry an `errorCode` (`@repo/schemas/jobs`), and `JobStatusPanel.resolveFailureMessage` maps it through `ERROR_CODE_MESSAGES` to friendly copy — raw `error` text is only shown when there is no code. Add new codes to both the schema enum and that map. `Product.tsx` also handles RTK `CUSTOM_ERROR` strings from the XHR upload path.
 - Use the `@/` alias for `src/*` imports.
 - Tailwind v4 is CSS-first: theme tokens in `src/styles/index.css` (`@theme inline`, OKLCH tokens); there is no `tailwind.config.js`. Dark-mode tokens exist but no toggle applies `.dark` anywhere.
 - Pages compose `<section className="py-16 sm:py-20">` + `PageContainer` (`max-w-7xl`; product flow uses `max-w-2xl`). Icons are lucide-react.
